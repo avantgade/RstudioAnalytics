@@ -6,7 +6,7 @@ output: html_notebook
 
 
 ```{r, eval = FALSE}
-#Clearing libraries to prevent errors
+#Clearing libraries to prevent errors prob
 
 detachAllPackages <- function() {
 
