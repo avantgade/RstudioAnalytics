@@ -1,0 +1,311 @@
+---
+title: "Class 2 HW - Student"
+output: html_notebook
+---
+#Setting up the below based off Lab 3 in order to work off actual data regardless of requirements. 
+
+
+```{r, eval = FALSE}
+#Clearing libraries to prevent errors
+
+detachAllPackages <- function() {
+
+  basic.packages <- c("package:stats","package:graphics","package:grDevices","package:utils","package:datasets","package:methods","package:base")
+
+  package.list <- search()[ifelse(unlist(gregexpr("package:",search()))==1,TRUE,FALSE)]
+
+  package.list <- setdiff(package.list,basic.packages)
+
+  if (length(package.list)>0)  for (package in package.list) detach(package, character.only=TRUE)
+
+
+}
+
+detachAllPackages()
+```
+
+
+From: (https://emilhvitfeldt.github.io/ISLR-tidymodels-labs/index.html)
+
+Note: We are continuing with the Boston data set but...https://medium.com/@docintangible/racist-data-destruction-113e3eff54a8
+
+```{r, set.seed(1234)}
+knitr::opts_chunk$set(cache.extra = knitr::rand_seed)
+```
+
+```{r, echo = FALSE, include= FALSE, warning = FALSE, message = FALSE}
+#' <!-- ####################################################################################################### -->
+#' <!-- ####################################################################################################### -->
+#' <!-- ##################################LOADING PACKAGES##################################################### -->
+
+#tryCatch(require(pacman),finally=utils:::install.packages(pkgs='pacman',repos='http://cran.r-project.org'));
+#require(pacman)
+
+#' <!-- ##if the above doesn't work, use this code## -->
+#' <!-- ##tryCatch -->
+#' <!-- #detach("package:pacman", unload = TRUE) -->
+#' <!-- #install.packages("pacman", dependencies = TRUE) -->
+#' <!-- # ## install.packages("pacman") -->
+
+pacman::p_load(broom,
+               corrr,
+               dials,
+               dplyr,
+               factoextra,
+               ggplot2,
+               glmnet,
+               infer,
+               ISLR,
+               kernlab,
+               kknn,
+               klaR,
+               MASS,
+               mclust,
+               modeldata,
+               paletteer,
+               parsnip,
+               patchwork,
+               proxy,
+               purrr,
+               randomForest,
+               readr,
+               recipes,
+               rpart,
+               rpart.plot,
+               rsample,
+               scico,
+               tibble,
+               tidymodels,
+               tidyr,
+               tidyverse,
+               tune,
+               vip,
+               workflows,
+               workflowsets,
+               xgboost,
+               yardstick,
+               conflicted,
+               discrim,
+               tidylog
+               
+)
+
+#' <!-- #Loading from GitHub -->
+#' <!-- #pacman::p_load_current_gh("trinker/lexicon", "trinker/sentimentr") -->
+```
+
+#Okay, running into errors with gzfile(file, mode); UPDATE, rectified upon restarting RStudio
+
+```{r, echo = FALSE, include= FALSE, warning = FALSE, message = FALSE}
+
+#' <!-- #Loading libraries -->
+
+suppressPackageStartupMessages({
+library(broom)
+library(corrr)
+library(dials)
+library(dplyr)
+library(factoextra)
+library(ggplot2)
+library(glmnet)
+library(infer)
+library(ISLR)
+library(kernlab)
+library(kknn)
+library(klaR)
+library(MASS)
+library(mclust)
+library(modeldata)
+library(paletteer)
+library(parsnip)
+library(patchwork)
+library(proxy)
+library(purrr)
+library(randomForest)
+library(readr)
+library(recipes)
+library(rpart)
+library(rpart.plot)
+library(rsample)
+library(scico)
+library(tibble)
+library(tidymodels)
+library(tidyr)
+library(tidyverse)
+library(tune)
+library(vip)
+library(workflows)
+library(workflowsets)
+library(xgboost)
+library(yardstick)
+library(conflicted)
+library(discrim)
+library(tidylog)
+})
+
+# From: https://rdrr.io/github/Bio302-UiB/data-handling/f/inst/tutorials/using-dplyr/using-dplyr.Rmd
+# use purrr::map to iterate over tidylog functions to prevent conflict with dplyr
+# map(getNamespaceExports("tidylog"), ~conflict_prefer(.x, "tidylog", quiet = TRUE))
+
+for (f in getNamespaceExports("tidylog")) {
+    conflicted::conflict_prefer(f, "tidylog", quiet = TRUE)
+}
+
+# Tidylog run through
+# From: https://github.com/elbersb/tidylog/blob/master/README.Rmd
+
+
+```
+
+```{r}
+# Setting conflict_prefer
+#should be no conflicts in this code
+```
+
+# Linear Regression
+
+This lab will go over how to perform linear regression. This will include [simple linear regression] and [multiple linear regression] in addition to how you can apply transformations to the predictors. This chapter will use [parsnip](https://www.tidymodels.org/start/models/) for model fitting and [recipes and workflows](https://www.tidymodels.org/start/recipes/) to perform the transformations.
+ 
+## Libraries
+
+We load tidymodels and ISLR and MASS for data sets.
+
+```{r, message=FALSE}
+library(MASS) # For Boston data set; want to make sure I have a reference for how code will actually run
+library(tidymodels)
+library(ISLR)
+```
+
+# 1
+
+Create a `parsnip` specification for a linear regression model.
+
+# HW code
+```{r}
+lm_spec <- linear_reg() %>% 
+  set_mode("regression") %>%
+  set_engine("lm") #not technically needed since default is linear regression, but better to be explicit. It is a little silly that we're specifying our linear regression to be a regression analysis using a linear modeling engine.
+```
+
+# 2
+
+Once we have the specification we can `fit` it by supplying a formula expression and the data we want to fit the model on.
+The formula is written on the form `y ~ x` where `y` is the name of the response and `x` is the name of the predictors.
+The names used in the formula should match the names of the variables in the data set passed to `data`. 
+
+Use `lm_spec` to fit the model of `medv` predicted by every predictor variable. Hint: you can use "." to specify every predictor.
+
+# HW code
+
+```{r}
+lm_fit <- lm_spec %>%
+  fit(medv ~ lstat, data = Boston)
+lm_fit
+```
+
+# 3
+
+Get a summary of your model using `pluck` and `summary`
+
+# HW code
+
+```{r}
+lm_fit %>% 
+  pluck("fit") %>% #accessing fit model object created by parsnip
+  summary() #getting more detailed information about fit and stats of model
+```
+
+# 4
+
+Take a look at `lm_fit` with `tidy`
+
+# HW Code
+
+```{r}
+tidy(lm_fit) #return basic parameters of fit object (slope and intercept)
+```
+
+# 5
+
+Extract the model statistics using `glance`
+
+#HW code
+```{r}
+glance(lm_fit) #extract model statistics (significance, fit stats etc)
+```
+
+# 6
+
+Get the predicted `medv` values from your model using `predict`
+
+#HW code
+```{r}
+predict(lm_fit, new_data = Boston) #predicted data for each instance based off model
+```
+
+
+# 7
+
+Bind the predicted columns to your existing data
+
+#HW code
+
+```{r}
+bind_cols(
+  predict(lm_fit, new_data = Boston), #call predicted values from model
+  Boston #add predicted values onto Boston dataframe
+) %>%
+  select(medv, .pred) #selecting medv and pred data out to compare predicted and actual data
+```
+
+# 8
+
+Now, make things easier by just using the `augment` function to do this.
+
+#HW code
+```{r}
+augment(lm_fit, new_data = Boston) #what we just did but calling whole dataframe rather than selected columns, binds the predicted and residual values to the left side of the data.
+```
+
+
+# 9
+
+Focus specifically on the median value and the `.pred`, then you can select those two columns
+
+#HW code
+```{r}
+augment(lm_fit, new_data = Boston) %>%
+  select(medv, .pred) # going back to calling specifically the median value and predicted values out for easier comparasion. Wow, less code, much wow.
+```
+
+
+# 10
+
+Create a `recipe` with an interaction step between lstat and age
+
+#HW code
+```{r}
+rec_spec <- recipe(medv ~ ., data = Boston) %>%
+  step_interact(~ lstat:age) #specifying recipe step to make new columns that are based off interaction of lstat and age
+```
+
+# 11
+
+Create a `workflow` and add your lm_spec model and your rec_spec recipe.
+
+#HW code
+```{r}
+lm_wf <- workflow() %>% #aggregating information needed for fit and prediction from model based off called objects below
+  add_model(lm_spec) %>% #utilizing previous linear regression model
+  add_recipe(rec_spec) #utilizing recipe step made in #10
+```
+
+# 12
+
+Fit your `workflow`.
+
+#HW code
+```{r}
+lm_wf %>% fit(Boston) #utilizing fit function from parsnip on workflow made from recipe w/ lstat and age interaction and linear regression model to evaluate model stats
+```
+

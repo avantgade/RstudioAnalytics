@@ -1,0 +1,663 @@
+---
+title: "HW Praful Gade"
+author: "Praful Gade"
+date: "2024-06-don'tworryaboutit"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+## IMPORTING PACKAGES BELOW.
+```{r, echo = FALSE, include= FALSE, warning = FALSE, message = FALSE}
+
+#' <!-- #Loading libraries -->
+
+suppressPackageStartupMessages({
+    library(Hmisc) # Contains many functions useful for data analysis
+    library(checkmate) # Fast and Versatile Argument Checks
+    library(corrr) # Correlations in R
+    library(conflicted) # Makes it easier to handle same named functions that are in different packages
+    library(readxl) # reading in Excel files
+    library(dplyr) # data manipulation
+    library(tidyr) # Tidy Messy Data and pivot_longer and pivot_wider
+    library(ggplot2) # data visualization
+    library(knitr) # knitting data into HTML, Word, or PDF
+    library(evaluate) # Parsing and Evaluation Tools that Provide More Details than the Default
+    library(iopsych) # Methods for Industrial/Organizational Psychology
+    library(psych) # Procedures for Psychological, Psychometric, and Personality Research
+    library(quantreg) # Quantile Regression
+    library(lavaan) # confirmatory factor analysis (CFA) and structural equation modeling (SEM)
+    library(xtable) # Export Tables to LaTeX or HTML
+    library(reshape2) # transforming data between wide and long (tall)
+    library(GPArotation) # GPA Factor Rotation
+    library(Amelia) # A Program for Missing Data
+    # library(esquisse) # Explore and Visualize Your Data Interactively
+    library(expss) # Tables, Labels and Some Useful Functions from Spreadsheets and 'SPSS' Statistics
+    library(multilevel) # Multilevel Functions
+    library(janitor) # 	Simple Tools for Examining and Cleaning Dirty Data
+    library(mice) # Multivariate Imputation by Chained Equations
+    library(skimr) # Exploratory Data Analysis
+    library(lmtest) # A collection of tests, data sets, and examples for diagnostic checking in linear regression models
+    library(naniar) # helps with missing data
+    library(tidylog) # Creates a log to tell you what your tidyverse commands are doing to the data. NOTE: MAKE SURE TO ALWAYS LOAD LAST!!!
+})
+
+for (f in getNamespaceExports("tidylog")) {
+    conflicted::conflict_prefer(f, "tidylog", quiet = TRUE)
+}
+
+```
+
+
+##Porting in the SAQ data set
+
+```{r} 
+library(haven)
+SAQ <- read_sav("SAQ.sav")
+View(SAQ)
+#Item content for corresponding column name found in View.
+
+hw1data <- SAQ
+#Renaming SAQ to hwdata1 for easier recognition and consistent formatting for future files.
+
+openxlsx::write.xlsx(hwdata1, "c:/Advanced Analytics Project/00_Data/HWData1.xlsx")
+#Converting to Excel in case needed for later use.
+
+```
+
+## Viewing column names.
+
+You can also embed plots, for example:
+
+```{r}
+#cat(colnames(hwdata1), sep = ",\n")
+#Commented out since it's not really needed atm, but kept for easy access to column names when calling in following code.
+```
+
+
+```{r}
+#' Missing map of data
+missmap(hw1data, y.at=c(1), y.labels=c(''), col=c('yellow', 'black'))
+```
+
+## No missing data found based off analysis. No need for imputation or omission.
+
+
+
+##Reverse coding item 3, question text suggests it should be in order to follow trend of other items.
+
+
+```{r}
+
+hwdata1 <- hwdata1 %>% 
+  mutate(Q3Reversed = 6 - Question_03)
+
+```
+
+
+
+```{r}
+EFAdata1 <- hwdata1 %>%
+    select(-c(FAC1_1,
+              FAC2_1,
+              FAC3_1,
+              FAC4_1,
+              FAC1_2,
+              FAC2_2,
+              FAC3_2,
+              FAC4_2,
+              Question_03))
+
+
+```
+
+## Removing FAC Items, they don't look like they're meant to be used in our EFA analysis or part of our "survey scales". Also dropped Question 3 in favor of new reverse scored item.
+
+
+
+```{r}
+##outliers
+cutoff = qchisq(1-.001, ncol(EFAdata1))
+mahal = mahalanobis(EFAdata1,
+                    colMeans(EFAdata1),
+                    cov(EFAdata1))
+cutoff ##cutoff score
+ncol(EFAdata1) ##df
+summary(mahal < cutoff)
+```
+#setting cutoff score, creating mahal and then finding columns that exceed the cutoff. We've found 90ish outliers. Located in mahal_out following next two chunks. Cutoff score is based off a chisquared value (48.26794) Extreme values would exceed these.
+
+##Observing all values flagged as FALSE
+
+```{r} 
+nomiss_mahal <- EFAdata1 %>%
+    bind_cols(mahal) %>%
+    rename(mahal = `...24`) # renaming the new column "mahal"
+```
+
+```{r}
+mahal_out <- nomiss_mahal %>%
+    filter(mahal > cutoff) %>%
+    arrange(desc(mahal)) # sort mahal values from most to least
+```
+## No sense of extremely problemmatic outliers based off cursory glance of highest offenders; no extreme fencesitting, christmas trees, etc etc. 
+
+##Retaining all outlier values. Noted that there were 97 observed.
+
+
+## Observing Additivity
+
+```{r}
+##additivity
+correl = cor(EFAdata1, use = "pairwise.complete.obs")
+
+#Using cor function on data using pairwise functions, reporting back diagonal.
+
+symnum(correl)
+
+correl
+#will refer to EFAdata1 correlation matrix.
+```
+
+##no violations of additivity assumption, no 1s observed off diagonal.
+
+##Setting up dake regression value in order to see if there are any patterns in residuals.
+
+```{r}
+##assumption set up
+random = rchisq(nrow(EFAdata1), 7)
+fake = lm(random~., # Y is predicted by all variables in the data
+          data = EFAdata1) 
+standardized = rstudent(fake) # Z-score all of the values to make it easier to interpret.
+fitted = scale(fake$fitted.values)
+```
+
+##Checking Residuals
+
+```{r}
+##normality test
+hist(standardized)
+```
+
+##Right Skew in Data observed.
+
+## Q-Q Plot
+
+Check linearity using qqplot.
+
+```{r}
+##linearity
+qqnorm(standardized)
+#using residuals to determine Q-Q plot.
+abline(0,1)
+
+```
+
+
+##For reference:
+##If you just asked yourself, "what's a Q-Q plot?", go [here](https://data.library.virginia.edu/understanding-q-q-plots/).
+##What should we see? A lot close to zero and fewer farther away. An "S" shape implies a cubic relationship. A "U" shape implies a squared relationship. Generally, we only look between -2 and 2. It is hard to deal with data at the edges.
+
+##EFAdata1 residuals not truly linear, but at the very least it's not cubic or totally squared.
+
+## Homogeneity
+
+##Checking homogeneity.
+
+##For reference
+##If you just asked yourself, "what's homogeneity?" go [here](http://www.sthda.com/english/wiki/compare-multiple-sample-variances-in-r).
+
+```{r}
+##homogeneity
+plot(fitted,standardized)
+##Utilizing EFAData1 Correlation Matrix for homogenity plot
+abline(0,0)
+abline(v = 0)
+```
+##Some clustering, especially on x-axis line but not enough shaping for us to stop analysis. No "megaphone" shape.
+
+
+## Bartlett's Test
+
+##Checking correlation adequacy with Bartlett's test.
+
+```{r}
+##correlation adequacy Bartlett's test with EFAData1 correlation matrix and values
+cortest.bartlett(correl, n = nrow(EFAdata1))
+```
+##Significant p value, correlations adequate for EFA analysis.
+
+## Kaiser, Meyer, Olkin Measure of Sampling Adequacy (KMO) Test; looking for higher values close to 1
+
+```{r}
+##sampling adequacy KMO test using EFAdata1 correlation matrix
+KMO(correl[,1:23])
+```
+
+##Overall adequacy is .93, close enough to 1, data is suited enough for continued factor analysis.
+
+
+
+###Beginning EFA Analysis
+
+
+```{r}
+
+#' <!-- ####################################################################################################### -->
+#' <!-- ####################################################################################################### -->
+#' <!-- ##########################EXPLORATORY FACTOR ANALYSIS ################################################# -->
+
+
+set.seed(1998) 
+#establishing seed for analysis to keep pseudorandom values consistent
+
+```
+
+
+```{r}
+#' Creating ID variables for data set.
+
+EFAdata1 <- EFAdata1 %>% 
+    mutate(ID = row_number())
+```
+##ID fell to end of dataset, moving to front below.
+
+```{r}
+EFAdata1 <- EFAdata1 %>%
+    dplyr::select(ID, everything())
+```
+
+```{r}
+colnames(Data)
+```
+##ID Moved to front as confirmed.
+
+##Creating training and test data sets.
+
+```{r}
+training <- sample(EFAdata1$ID, length(EFAdata1$ID)*0.5) #.5 signifying percent of data IDs attributed to training dataset
+
+Data_training <- subset(EFAdata1, ID %in% training)
+Data_test <- subset(EFAdata1, !(ID %in% training))
+```
+
+#subsetting the 50% of data IDs that are in training into data_training
+#subsetting the remaining data that's not in training into data_test
+
+##Creating histograms of the items
+
+```{r}
+hist(Data_training$Question_01, breaks = 6)
+hist(Data_training$Question_02, breaks = 6)
+hist(Data_training$Q3Reversed, breaks = 6)
+hist(Data_training$Question_04, breaks = 6)
+hist(Data_training$Question_05, breaks = 6)
+hist(Data_training$Question_06, breaks = 6)
+hist(Data_training$Question_07, breaks = 6)
+hist(Data_training$Question_08, breaks = 6)
+hist(Data_training$Question_09, breaks = 6)
+hist(Data_training$Question_10, breaks = 6)
+hist(Data_training$Question_11, breaks = 6)
+hist(Data_training$Question_12, breaks = 6)
+hist(Data_training$Question_13, breaks = 6)
+hist(Data_training$Question_14, breaks = 6)
+hist(Data_training$Question_15, breaks = 6)
+hist(Data_training$Question_16, breaks = 6)
+hist(Data_training$Question_17, breaks = 6)
+hist(Data_training$Question_18, breaks = 6)
+hist(Data_training$Question_19, breaks = 6)
+hist(Data_training$Question_20, breaks = 6)
+hist(Data_training$Question_21, breaks = 6)
+hist(Data_training$Question_22, breaks = 6)
+hist(Data_training$Question_23, breaks = 6)
+
+#Breaks are 6 to account for the 5 degrees on the scale.
+
+```
+
+
+#correlating all the data, shave removes the top redundant triangle of values.
+
+```{r}
+library(corrr)
+
+Cor_Mat <- Data_training %>%
+    correlate() %>% 
+    shave() %>% # Remove upper triangle
+    fashion() # Print in nice format
+
+print(Cor_Mat)
+```
+
+```{r}
+#Flatten Correlation Matrix Function
+
+flattenCorrMatrix <- function(cormat, pmat, nmat) {
+    ut <- upper.tri(cormat)
+    data.frame(
+        row = rownames(cormat)[row(cormat)[ut]],
+        column = rownames(cormat)[col(cormat)[ut]],
+        cor  =(cormat)[ut],
+        p = pmat[ut],
+        n = nmat[ut]
+    )
+}
+
+```
+
+
+##Flattening correlation matrix below.
+
+```{r}
+
+library(Hmisc)
+
+#Turning into matrix so it can function with Hmisc.
+Data_training_MAT <- as.matrix(Data_training)
+
+library(checkmate)
+res <- rcorr(Data_training_MAT)
+print(res)
+
+```
+
+```{r}
+# New way
+
+library(corrr)
+
+Data_Flat_Cor_Mat_stretch <- Data_training %>%
+    select(-ID) %>% # remove ID variable since we don't need it
+    correlate() %>% # calculate correlations
+    stretch() %>% # make it tall
+    fashion() # round it
+
+Data_Flat_Cor_Mat_stretch
+```
+
+##Flattened correlation matrix above.
+
+
+```{r}
+#Filtering mechanisms if needed, taken from example, needs to be adjusted.
+
+#AGR_Items <- c("A1",
+ #                 "A2",
+  #                "A3",
+   #               "A4",
+    #              "A5")
+
+
+#Data_Flat_Cor_Mat <- Data_Flat_Cor_Mat %>%
+ #   filter(row %in% AGR_Items) %>%
+  #  filter(!column %in% AGR_Items)
+
+#Data_Flat_Cor_Mat
+
+```
+
+##Below turns matrix into Excel spreadsheet.
+
+```{r}
+#openxlsx::write.xlsx(Data_Flat_Cor_Mat, "00_Data/Survey_Outcome_Corrs.xlsx")
+```
+
+
+###EFA ANALYSIS FUNCTIONS BELOW
+
+
+##Parallel Analysis
+
+##For Reference:
+##We will use [Parallel Analysis](https://en.wikipedia.org/wiki/Parallel_analysis) with a journal article [here](https://journals.sagepub.com/doi/pdf/10.1177/1094428104263675) to give us a baseline for factor retention. Often times you will simply be given data and asked how many factors there are. You may have some a priori feelings to this number, but it is also good to let the data guide you.
+
+```{r}
+library(psych)
+fa.parallel(Data_training)
+##Parallel Analysis from psych package.
+```
+
+
+##Testing for multivariate normality
+
+```{r}
+
+library(MVN)
+result <- mvn(data = EFAdata1, mvnTest = "hz") ##running Henze-Zirkler’s MVN test
+result$multivariateNormality
+```
+## Multivariate Normality confirmed. Proceeding with MLE.
+
+
+##Using n-2 to assess the number of factors for parsimony assumption and interpretability. So dropping factors from 5 to 3.
+
+
+##NOTE: The variable naming convention is as follows:
+#* fa = Factor Analysis
+#* ml = Maximum Likelihood (the method of factor analysis we are using)
+#* 3 = the number of factors we think are in the data
+#* trn = the training data (as opposed to the test data where we would run a follow up CFA to "confirm" the factor structure)
+#* oblimin = rotation type
+##Factor analysis + Rotation below.
+
+```{r}
+fa_ml_3_trn <- fa(Data_training[c(2:24)], nfactors = 3, fm="ml", rotate="oblimin") ##Rotating with oblimin method.
+
+print(fa_ml_3_trn)
+
+print(fa_ml_3_trn$loadings, cutoff = .3) #Cutoff for factors.
+```
+##No crossloading observed. Items 1, 4, 22, and 23 did not load onto model. Four factor model attempted.
+
+```{r}
+fa_ml_4_trn <- fa(Data_training[c(2:24)], nfactors = 4, fm="ml", rotate = "oblimin")
+##See notes above for interpretation.
+print(fa_ml_4_trn)
+
+print(fa_ml_3_trn$loadings, cutoff = .3) 
+```
+
+##Four factor model more useless than my appendix, no actual loading onto extra factor, but somehow improving fit statistics. Continuing with three factors.
+
+###Building scales.
+
+```{r}
+
+library(dplyr)
+bfi_items <- EFAdata1 %>% #creating bfi items dataframe based off EFAdata1 set.
+    dplyr::select(-c(ID)) #removing ID from new dataframe
+```
+
+
+```{r}
+library(skimr)
+
+skim(bfi_items) #obtaining names of the remaining items
+```
+
+##building keys, no need for reverse scoring based off console output.
+
+```{r}
+bfi_keys_list <- list(CompAnx = c(4, 5, 6, 9, 11, 12, 13, 14, 17), # Factor 1: Computer/Statistical Stress
+                      TechAnx = c(2, 8, 15, 18, 19, 20, 22), #Factor 2: Anxiety Symptoms cuz Tech
+                      MathAnx = c(7, 10, 16) #Factor 3: Mathematics Stress
+                      )#negatives are for reverse scorings.
+
+bfi_keys <- make.keys(bfi_items, bfi_keys_list, item.labels = colnames(bfi_items)) #Corresponding generated categories to actual keys and data
+```
+
+##Scoring Items
+
+```{r}
+scores <- scoreItems(bfi_keys, bfi_items, impute = "none", 
+                         min = 1, max = 5, digits = 3)
+
+head(scores$scores)
+
+scores_df <- as.data.frame(scores$scores)
+```
+##splitting data into factors
+
+```{r}
+#' Now let's split out the data into factors for easier analysis
+COMP <- bfi_items %>%
+  dplyr::select("Question_05","Question_06","Question_07","Question_10","Question_12","Question_13","Question_14","Question_15","Question_18",)
+
+TECH <- bfi_items %>%
+dplyr::select("Question_02","Question_09","Question_16","Question_19","Question_20","Question_21","Q3Reversed")
+
+MATH <- bfi_items %>%
+dplyr::select("Question_08", "Question_11","Question_17",)
+```
+
+##Creating keys by individual scales: COMP
+
+```{r}
+bfi_keys_list <- list(CompAnx=c(1, 2, 3, 4, 5, 6, 7, 8, 9))
+
+bfi_keys <- make.keys(COMP, bfi_keys_list, item.labels = colnames(COMP))
+
+```
+
+```{r}
+COMP_ALPHA <- psych::alpha(x = COMP[, abs(bfi_keys_list$CompAnx)], keys = bfi_keys)
+```
+
+```{r}
+COMP_total <- round(as.data.frame(COMP_ALPHA$total), 3)
+COMP_alpha_drop <- round(as.data.frame(COMP_ALPHA$alpha.drop), 3)
+COMP_item_stat <- round(as.data.frame(COMP_ALPHA$item.stats), 3)
+
+COMP_ALPHA
+```
+
+##Creating keys by individual scales: TECH
+
+```{r}
+bfi_keys_list <- list(TechAnx=c(1, 2, 3, 4, 5, 6, 7))
+
+bfi_keys <- make.keys(TECH, bfi_keys_list, item.labels = colnames(TECH))
+
+```
+
+```{r}
+TECH_ALPHA <- psych::alpha(x = TECH[, abs(bfi_keys_list$TechAnx)], keys = bfi_keys)
+```
+
+```{r}
+TECH_total <- round(as.data.frame(TECH_ALPHA$total), 3)
+TECH_alpha_drop <- round(as.data.frame(TECH_ALPHA$alpha.drop), 3)
+TECH_item_stat <- round(as.data.frame(TECH_ALPHA$item.stats), 3)
+
+TECH_ALPHA
+```
+
+##Creating keys by individual scales: MATH
+
+```{r}
+bfi_keys_list <- list(MathAnx=c(1, 2, 3))
+
+bfi_keys <- make.keys(MATH, bfi_keys_list, item.labels = colnames(MATH))
+
+```
+
+```{r}
+MATH_ALPHA <- psych::alpha(x = MATH[, abs(bfi_keys_list$MathAnx)], keys = bfi_keys)
+```
+
+```{r}
+MATH_total <- round(as.data.frame(MATH_ALPHA$total), 3)
+MATH_alpha_drop <- round(as.data.frame(MATH_ALPHA$alpha.drop), 3)
+MATH_item_stat <- round(as.data.frame(MATH_ALPHA$item.stats), 3)
+
+MATH_ALPHA
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

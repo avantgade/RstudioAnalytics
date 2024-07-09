@@ -1,0 +1,384 @@
+---
+title: "ISLR Tidymodels Labs - 3 - Linear Regression"
+output: html_notebook
+---
+
+```{r, eval = FALSE}
+#Clearing libraries to prevent errors
+
+detachAllPackages <- function() {
+
+  basic.packages <- c("package:stats","package:graphics","package:grDevices","package:utils","package:datasets","package:methods","package:base")
+
+  package.list <- search()[ifelse(unlist(gregexpr("package:",search()))==1,TRUE,FALSE)]
+
+  package.list <- setdiff(package.list,basic.packages)
+
+  if (length(package.list)>0)  for (package in package.list) detach(package, character.only=TRUE)
+
+
+}
+
+detachAllPackages()
+```
+
+
+From: (https://emilhvitfeldt.github.io/ISLR-tidymodels-labs/index.html)
+
+Note: We are continuing with the Boston data set but...https://medium.com/@docintangible/racist-data-destruction-113e3eff54a8
+
+```{r, set.seed(1234)}
+knitr::opts_chunk$set(cache.extra = knitr::rand_seed)
+```
+
+```{r, echo = FALSE, include= FALSE, warning = FALSE, message = FALSE}
+#' <!-- ####################################################################################################### -->
+#' <!-- ####################################################################################################### -->
+#' <!-- ##################################LOADING PACKAGES##################################################### -->
+
+tryCatch(require(pacman),finally=utils:::install.packages(pkgs='pacman',repos='http://cran.r-project.org'));
+require(pacman)
+
+#' <!-- ##if the above doesn't work, use this code## -->
+#' <!-- ##tryCatch -->
+#' <!-- #detach("package:pacman", unload = TRUE) -->
+#' <!-- #install.packages("pacman", dependencies = TRUE) -->
+#' <!-- # ## install.packages("pacman") -->
+
+pacman::p_load(broom,
+               corrr,
+               dials,
+               dplyr,
+               factoextra,
+               ggplot2,
+               glmnet,
+               infer,
+               ISLR,
+               kernlab,
+               kknn,
+               klaR,
+               MASS,
+               mclust,
+               modeldata,
+               paletteer,
+               parsnip,
+               patchwork,
+               proxy,
+               purrr,
+               randomForest,
+               readr,
+               recipes,
+               rpart,
+               rpart.plot,
+               rsample,
+               scico,
+               tibble,
+               tidymodels,
+               tidyr,
+               tidyverse,
+               tune,
+               vip,
+               workflows,
+               workflowsets,
+               xgboost,
+               yardstick,
+               conflicted,
+               discrim,
+               tidylog
+               
+)
+
+#' <!-- #Loading from GitHub -->
+#' <!-- #pacman::p_load_current_gh("trinker/lexicon", "trinker/sentimentr") -->
+```
+
+```{r, echo = FALSE, include= FALSE, warning = FALSE, message = FALSE}
+
+#' <!-- #Loading libraries -->
+
+suppressPackageStartupMessages({
+library(broom)
+library(corrr)
+library(dials)
+library(dplyr)
+library(factoextra)
+library(ggplot2)
+library(glmnet)
+library(infer)
+library(ISLR)
+library(kernlab)
+library(kknn)
+library(klaR)
+library(MASS)
+library(mclust)
+library(modeldata)
+library(paletteer)
+library(parsnip)
+library(patchwork)
+library(proxy)
+library(purrr)
+library(randomForest)
+library(readr)
+library(recipes)
+library(rpart)
+library(rpart.plot)
+library(rsample)
+library(scico)
+library(tibble)
+library(tidymodels)
+library(tidyr)
+library(tidyverse)
+library(tune)
+library(vip)
+library(workflows)
+library(workflowsets)
+library(xgboost)
+library(yardstick)
+library(conflicted)
+library(discrim)
+library(tidylog)
+})
+
+# From: https://rdrr.io/github/Bio302-UiB/data-handling/f/inst/tutorials/using-dplyr/using-dplyr.Rmd
+# use purrr::map to iterate over tidylog functions to prevent conflict with dplyr
+# map(getNamespaceExports("tidylog"), ~conflict_prefer(.x, "tidylog", quiet = TRUE))
+
+for (f in getNamespaceExports("tidylog")) {
+    conflicted::conflict_prefer(f, "tidylog", quiet = TRUE)
+}
+
+# Tidylog run through
+# From: https://github.com/elbersb/tidylog/blob/master/README.Rmd
+
+
+```
+
+```{r}
+# Setting conflict_prefer
+
+```
+
+# Linear Regression
+
+This lab will go over how to perform linear regression. This will include [simple linear regression] and [multiple linear regression] in addition to how you can apply transformations to the predictors. This chapter will use [parsnip](https://www.tidymodels.org/start/models/) for model fitting and [recipes and workflows](https://www.tidymodels.org/start/recipes/) to perform the transformations.
+ 
+## Libraries
+
+We load tidymodels and ISLR and MASS for data sets.
+
+```{r, message=FALSE}
+library(MASS) # For Boston data set
+library(tidymodels)
+library(ISLR)
+```
+
+## Simple linear regression
+
+The `Boston` data set contain various statistics for 506 neighborhoods in Boston. We will build a simple linear regression model that related the median value of owner-occupied homes (`medv`) as the response with a variable indicating the percentage of the population that belongs to a lower status (`lstat`) as the predictor.
+
+```{block, type='infobox'}
+The `Boston` data set is quite outdated and contains some really unfortunate variables.
+```
+
+We start by creating a `parsnip` specification for a linear regression model.
+
+```{r}
+lm_spec <- linear_reg() %>%
+  set_mode("regression") %>%
+  set_engine("lm")
+```
+
+While it is unnecessary to set the mode for a linear regression since it can only be regression, we continue to do it in these labs to be explicit.
+
+The specification doesn't perform any calculations by itself. It is just a specification of what we want to do.
+
+```{r}
+lm_spec
+```
+
+Once we have the specification we can `fit` it by supplying a formula expression and the data we want to fit the model on.
+The formula is written on the form `y ~ x` where `y` is the name of the response and `x` is the name of the predictors.
+The names used in the formula should match the names of the variables in the data set passed to `data`.
+
+```{r}
+lm_fit <- lm_spec %>%
+  fit(medv ~ lstat, data = Boston)
+lm_fit
+```
+
+The result of this fit is a parsnip model object. This object contains the underlying fit as well as some parsnip-specific information. If we want to look at the underlying fit object we can access it with `lm_fit$fit` or with
+
+```{r}
+lm_fit %>% 
+  pluck("fit")
+```
+
+The `lm` object has a nice `summary()` method that shows more information about the fit, including parameter estimates and lack-of-fit statistics.
+
+```{r}
+lm_fit %>% 
+  pluck("fit") %>%
+  summary()
+```
+
+We can use packages from the [broom](https://broom.tidymodels.org/) package to extract key information out of the model objects in tidy formats.
+
+the `tidy()` function returns the parameter estimates of a `lm` object
+
+```{r}
+tidy(lm_fit)
+```
+
+and `glance()` can be used to extract the model statistics.
+
+```{r}
+glance(lm_fit)
+```
+
+Suppose that we like the model fit and we want to generate predictions, we would typically use the `predict()` function like so:
+
+```{r, error=TRUE}
+predict(lm_fit)
+```
+
+But this produces an error when used on a parsnip model object. This is happening because we need to explicitly supply the data set that the predictions should be performed on via the `new_data` argument
+
+```{r}
+predict(lm_fit, new_data = Boston)
+```
+
+Notice how the predictions are returned as a tibble. This will always be the case for parsnip models, no matter what engine is used. This is very useful since consistency allows us to combine data sets easily.
+
+We can also return other types of predicts by specifying the `type` argument. Setting `type = "conf_int"` return a 95% confidence interval. 
+
+```{r}
+predict(lm_fit, new_data = Boston, type = "conf_int")
+```
+
+```{block, type='infobox'}
+Not all engines can return all types of predictions.
+```
+
+If you want to evaluate the performance of a model, you might want to compare the observed value and the predicted value for a data set. You can bind the columns together using `bind_cols` 
+
+```{r}
+bind_cols(
+  predict(lm_fit, new_data = Boston),
+  Boston
+) %>%
+  select(medv, .pred)
+```
+
+You can get the same results using the `augment()` function to save you a little bit of typing.
+
+Without selecting the specific columns, it will simply bind the `.pred` and `.resid` to the left side of the data.
+
+```{r}
+augment(lm_fit, new_data = Boston)
+```
+
+If you want to focus specifically on the median value and the `.pred`, then you can select those two columns
+
+```{r}
+augment(lm_fit, new_data = Boston) %>%
+  select(medv, .pred)
+```
+
+## Multiple linear regression
+
+The multiple linear regression model can be fit in much the same way as the [simple linear regression] model. The only difference is how we specify the predictors. We are using the same formula expression `y ~ x`, but we can specify multiple values by separating them with `+`s.
+
+```{r}
+lm_fit2 <- lm_spec %>% 
+  fit(medv ~ lstat + age, data = Boston)
+lm_fit2
+```
+
+Everything else works the same. From extracting parameter estimates
+
+```{r}
+tidy(lm_fit2)
+```
+
+to predicting new values
+
+```{r}
+predict(lm_fit2, new_data = Boston)
+```
+
+A shortcut when using formulas is to use the form `y ~ .` which means; set `y` as the response and set the remaining variables as predictors. This is very useful if you have a lot of variables and you don't want to type them out.
+
+```{r}
+lm_fit3 <- lm_spec %>% 
+  fit(medv ~ ., data = Boston)
+lm_fit3
+```
+
+For more formula syntax look at `?formula`.
+
+## Interaction terms
+
+```{r}
+lm_fit <- lm_spec %>%
+  fit(medv ~ lstat * age, data = Boston)
+lm_fit
+```
+
+```{r}
+rec_spec <- recipe(medv ~ lstat + age, data = Boston) %>%
+  step_interac(~ lstat:age)
+lm_wf <- workflow() %>%
+  add_model(lm_spec) %>%
+  add_recipe(rec_spec)
+lm_wf %>% fit(Boston)
+```
+
+## Non-linear transformations of the predictors
+
+```{r}
+lm_fit <- lm_spec %>%
+  fit(medv ~ lstat + I(lstat ^ 2), data = Boston)
+lm_fit
+```
+
+```{r}
+rec_spec <- recipe(medv ~ lstat, data = Boston) %>%
+  step_mutate(lstat2 = lstat ^ 2)
+lm_wf <- workflow() %>%
+  add_model(lm_spec) %>%
+  add_recipe(rec_spec)
+lm_fit2 <- lm_wf %>% fit(Boston)
+```
+
+```{r}
+rec_spec <- recipe(medv ~ lstat, data = Boston) %>%
+  step_log(lstat)
+lm_wf <- workflow() %>%
+  add_model(lm_spec) %>%
+  add_recipe(rec_spec)
+lm_wf %>% fit(Boston)
+```
+
+## Qualitative predictors
+
+```{r}
+Carseats
+```
+
+
+```{r}
+lm_spec %>% 
+  fit(Sales ~ . + Income:Advertising + Price:Age, data = Carseats)
+```
+
+```{r}
+rec_spec <- recipe(Sales ~ ., data = Carseats) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_interact(~ Income:Advertising + Price:Age)
+lm_wf <- workflow() %>%
+  add_model(lm_spec) %>%
+  add_recipe(rec_spec)
+lm_wf %>% fit(Carseats)
+```
+
+## Writing functions

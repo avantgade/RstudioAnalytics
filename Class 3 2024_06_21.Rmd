@@ -1,0 +1,2836 @@
+---
+title: "Class 3"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r, set.seed(1234)}
+knitr::opts_chunk$set(cache.extra = knitr::rand_seed)
+```
+
+# Overview of What we are going to today in this code
+
+tl;dr
+* First, read about how to train a final ML model. We split, we train, we test, we get a good idea of what model to use, but then what? Remember, the data you are trying to predict doesn't actually exists yet...
+* Preprocess and visualize the `attrition` data we've been working with in new and interesting ways using base R
+* Preprocess and visualize the `attrition` data using `tidymodels` and specifically `recipes`.
+* Predict attrition using Logistic Regression to serve as a baseline
+* Predict attrition using a more complex model to see if we can improve on performance
+* Finalize models
+* Why use `recipes` and `workflows`? Because it makes running 5 models really easy and as new packages come out for ML, you won't have to learn a new syntax if it is incorporated into `tidymodels`
+
+## How to Train a Final Machine Learning Model
+[Link](https://machinelearningmastery.com/train-final-machine-learning-model/)
+by Jason Brownlee on March 17, 2017 in Machine Learning Process
+
+The machine learning model that we use to make predictions on new data is called the final model.
+
+There can be confusion in applied machine learning about how to train a final model.
+
+This error is seen with beginners to the field who ask questions such as:
+
+* _How do I predict with cross validation?_
+* _Which model do I choose from cross-validation?_
+* Do I use the model after preparing it on the training dataset?_
+
+This post will clear up the confusion.
+
+In this post, you will discover how to finalize your machine learning model in order to make predictions on new data.
+
+Let’s get started.
+
+### What is a Final Model?
+
+A final machine learning model is a model that you use to make predictions on new data.
+
+That is, given new examples of input data, you want to use the model to predict the expected output. This may be a classification (assign a label) or a regression (a real value).
+
+For example, whether the photo is a picture of a dog or a cat, or the estimated number of sales for tomorrow.
+
+The goal of your machine learning project is to arrive at a final model that performs the best, where “best” is defined by:
+
+* **Data**: the historical data that you have available.
+* **Time**: the time you have to spend on the project.
+* **Procedure**: the data preparation steps, algorithm or algorithms, and the chosen algorithm configurations.
+
+In your project, you gather the data, spend the time you have, and discover the data preparation procedures, algorithm to use, and how to configure it.
+
+The final model is the pinnacle of this process, the end you seek in order to start actually making predictions.
+
+### The Purpose of Train/Test Sets
+
+Why do we use train and test sets?
+
+Creating a train and test split of your dataset is one method to quickly evaluate the performance of an algorithm on your problem.
+
+The training dataset is used to prepare a model, to train it.
+
+We pretend the test dataset is new data where the output values are withheld from the algorithm. We gather predictions from the trained model on the inputs from the test dataset and compare them to the withheld output values of the test set.
+
+Comparing the predictions and withheld outputs on the test dataset allows us to compute a performance measure for the model on the test dataset. This is an estimate of the skill of the algorithm trained on the problem when making predictions on unseen data.
+
+Let’s unpack this further
+When we evaluate an algorithm, we are in fact evaluating all steps in the procedure, including how the training data was prepared (e.g. scaling), the choice of algorithm (e.g. kNN), and how the chosen algorithm was configured (e.g. k=3).
+
+The performance measure calculated on the predictions is an estimate of the skill of the whole procedure.
+
+We generalize the performance measure from:
+
+* _“the skill of the procedure on the **test set**_“
+
+to
+
+* _“the skill of the procedure on unseen **data**“_.
+
+This is quite a leap and requires that:
+
+The procedure is sufficiently robust that the estimate of skill is close to what we actually expect on unseen data.
+The choice of performance measure accurately captures what we are interested in measuring in predictions on unseen data.
+The choice of data preparation is well understood and repeatable on new data, and reversible if predictions need to be returned to their original scale or related to the original input values.
+The choice of algorithm makes sense for its intended use and operational environment (e.g. complexity or chosen programming language).
+A lot rides on the estimated skill of the whole procedure on the test set.
+
+In fact, using the train/test method of estimating the skill of the procedure on unseen data often has a high variance (unless we have a heck of a lot of data to split). This means that when it is repeated, it gives different results, often very different results.
+
+The outcome is that we may be quite uncertain about how well the procedure actually performs on unseen data and how one procedure compares to another.
+
+Often, time permitting, we prefer to use k-fold cross-validation instead.
+
+### The Purpose of k-fold Cross Validation
+
+Why do we use k-fold cross validation?
+
+Cross-validation is another method to estimate the skill of a method on unseen data. Like using a train-test split.
+
+Cross-validation systematically creates and evaluates multiple models on multiple subsets of the dataset.
+
+This, in turn, provides a population of performance measures.
+
+We can calculate the mean of these measures to get an idea of how well the procedure performs on average.
+We can calculate the standard deviation of these measures to get an idea of how much the skill of the procedure is expected to vary in practice.
+This is also helpful for providing a more nuanced comparison of one procedure to another when you are trying to choose which algorithm and data preparation procedures to use.
+
+Also, this information is invaluable as you can use the mean and spread to give a confidence interval on the expected performance on a machine learning procedure in practice.
+
+Both train-test splits and k-fold cross validation are examples of resampling methods.
+
+### Why do we use Resampling Methods?
+
+The problem with applied machine learning is that we are trying to model the unknown.
+
+On a given predictive modeling problem, the ideal model is one that performs the best when making predictions on new data.
+
+We don’t have new data, so we have to pretend with statistical tricks.
+
+The train-test split and k-fold cross validation are called resampling methods. Resampling methods are statistical procedures for sampling a dataset and estimating an unknown quantity.
+
+In the case of applied machine learning, we are interested in estimating the skill of a machine learning procedure on unseen data. More specifically, the skill of the predictions made by a machine learning procedure.
+
+Once we have the estimated skill, we are finished with the resampling method.
+
+If you are using a train-test split, that means you can discard the split datasets and the trained model.
+If you are using k-fold cross-validation, that means you can throw away all of the trained models.
+They have served their purpose and are no longer needed.
+
+You are now ready to finalize your model.
+
+### How to Finalize a Model?
+
+You finalize a model by applying the chosen machine learning procedure on all of your data.
+
+That’s it.
+
+With the finalized model, you can:
+
+Save the model for later or operational use.
+Make predictions on new data.
+What about the cross-validation models or the train-test datasets?
+
+They’ve been discarded. They are no longer needed. They have served their purpose to help you choose a procedure to finalize.
+
+### Common Questions
+
+This section lists some common questions you might have.
+
+#### Why not keep the model trained on the training dataset?
+
+and
+
+#### Why not keep the best model from the cross-validation?
+
+You can if you like.
+
+You may save time and effort by reusing one of the models trained during skill estimation.
+
+This can be a big deal if it takes days, weeks, or months to train a model.
+
+Your model will likely perform better when trained on all of the available data than just the subset used to estimate the performance of the model.
+
+This is why we prefer to train the final model on all available data.
+
+#### Won’t the performance of the model trained on all of the data be different?
+
+I think this question drives most of the misunderstanding around model finalization.
+
+Put another way:
+
+If you train a model on all of the available data, then how do you know how well the model will perform?
+You have already answered this question using the resampling procedure.
+
+If well designed, the performance measures you calculate using train-test or k-fold cross validation suitably describe how well the finalized model trained on all available historical data will perform in general.
+
+If you used k-fold cross validation, you will have an estimate of how “wrong” (or conversely, how “right”) the model will be on average, and the expected spread of that wrongness or rightness.
+
+This is why the careful design of your test harness is so absolutely critical in applied machine learning. A more robust test harness will allow you to lean on the estimated performance all the more.
+
+#### Each time I train the model, I get a different performance score; should I pick the model with the best score?
+
+Machine learning algorithms are stochastic and this behavior of different performance on the same data is to be expected.
+
+Resampling methods like repeated train/test or repeated k-fold cross-validation will help to get a handle on how much variance there is in the method.
+
+If it is a real concern, you can create multiple final models and take the mean from an ensemble of predictions in order to reduce the variance.
+
+I talk more about this in the post:
+
+* [Embrace Randomness in Machine Learning](https://machinelearningmastery.com/randomness-in-machine-learning/)
+
+### Summary
+
+In this post, you discovered how to train a final machine learning model for operational use.
+
+You have overcome obstacles to finalizing your model, such as:
+
+Understanding the goal of resampling procedures such as train-test splits and k-fold cross validation.
+Model finalization as training a new model on all available data.
+Separating the concern of estimating performance from finalizing the model.
+
+### From the Question Section
+Q: Hi Jason. Thanks for a great article!
+
+When you say that “You finalize a model by applying the chosen machine learning procedure on all of your data”, does this mean that before deploying the model you should train a completely new model with the best hyperparameters from the validation phase, but now using training data + validation data + testing data, i.e. including the completely unseen testing data that you had never touched before?
+
+This is how I interpret it, and it makes sense to me given that the whole the whole point of validation is to estimate the performance of a method of generating a model, rather than the performance of the model itself. Some people may argue, though, that because you’re now training on previously unseen data, it is impossible to know how the new trained model is actually performing and whether or not the new, real-world results will be in line with those estimated during validation and testing.
+
+If I am interpreting this correctly, is there a good technical description anywhere for why this works in theory, or a good explanation for convincing people that this is the correct approach?
+
+A: Yes. Correct. Yes. The prior results are estimates of the performance of the final model in practice.
+
+### Rob's take (with Claude 3 on backup)
+
+The statement suggests combining all available data (training, validation, and test sets) to train the final model before deployment. This approach is generally not recommended in machine learning practice because it violates the principle of holding out a test set for unbiased evaluation of the model's performance.
+
+When developing a machine learning model, the dataset is typically split into three subsets: training, validation, and test sets. The training set is used to train the model, the validation set is used for hyperparameter tuning and model selection, and the test set is held out to evaluate the final model's performance on unseen data.
+
+If you combine all the data (including the test set) to train the final model, you essentially leak information from the test set into the model during training. This means that the model has already seen and learned from the test data, making it impossible to obtain an unbiased estimate of its performance on truly unseen data.
+
+The primary purpose of the test set is to simulate the model's performance on new, unseen data in the real world. By including the test set in the training process, you lose the ability to assess the model's generalization capability accurately.
+
+Instead, the recommended approach is to train the final model using only the training and validation sets (after selecting the best hyperparameters during the validation phase). The test set should be kept entirely separate and used solely for evaluating the final model's performance. This evaluation on the test set provides an unbiased estimate of how the model will perform on new, unseen data in the real-world deployment.
+
+While it's tempting to use all available data for training the final model, doing so violates the fundamental principles of machine learning evaluation and can lead to overly optimistic performance estimates. Maintaining a held-out test set is crucial for obtaining reliable and realistic performance assessments.
+
+There are well-established resources and literature in machine learning that explain the importance of separating data into training, validation, and test sets, and the rationale behind keeping the test set untouched during model development.
+
+### Follow up question (which I feel is very rarely discussed)
+Can I evaluate the finalized model on all of the data to get a "current state"? For instance, If I'm developing an attrition model to see which employees are likely to leave, after I use the Training and Validation set to get the hyper parameters for my model, can I then run a model with those hyper parameters over all of my data to see who in the current data is most likely to leave?
+
+### Response
+
+Yes, you can evaluate the finalized model on all available data (including the test set) to get a "current state" or overall assessment after the model has been developed and finalized. This practice is acceptable and common in scenarios where you want to make predictions on the entire dataset once the model is ready for deployment.
+The key point is that you should not use the test set data for training or tuning the model itself. The test set should remain untouched during the model development and hyperparameter tuning phase, as its sole purpose is to provide an unbiased evaluation of the model's performance on unseen data.
+
+However, once you have selected the final model architecture and hyperparameters based on the training and validation sets, it is perfectly fine to apply this finalized model to the entire dataset, including the test set, to make predictions or assess the overall performance metrics.
+In your example of developing an attrition model, the recommended approach would be:
+
+Split the initial dataset into training, validation, and test sets.
+Use the training set to train the model and the validation set for hyperparameter tuning and model selection.
+Evaluate the performance of the selected model on the held-out test set to get an unbiased estimate of its generalization capability.
+Once you have finalized the model, you can apply it to the entire dataset (training, validation, and test sets combined) to obtain predictions or assessments for the current state, such as identifying which employees are most likely to leave based on the available data.
+
+By following this approach, you maintain the integrity of the test set during model development, while still being able to leverage all available data for making predictions or assessments once the model has been finalized and evaluated properly.
+
+This practice is commonly used in real-world applications, where the ultimate goal is to make predictions or assessments on the complete dataset using the best-performing model obtained through rigorous training, validation, and testing procedures.
+
+### To the code!!!
+
+# IBM HR Analysis (aka the Attrition data we've been working with)
+
+From: (https://www.kaggle.com/esmaeil391/ibm-hr-analysis-with-90-3-acc-and-89-auc)
+
+```{r, echo = FALSE, include= FALSE, warning = FALSE, message = FALSE}
+#' <!-- ####################################################################################################### -->
+#' <!-- ####################################################################################################### -->
+#' <!-- ##################################LOADING PACKAGES##################################################### -->
+
+tryCatch(require(pacman),finally=utils:::install.packages(pkgs='pacman',repos='http://cran.r-project.org'));
+require(pacman)
+
+#' <!-- ##if the above doesn't work, use this code## -->
+#' <!-- ##tryCatch -->
+#' <!-- #detach("package:pacman", unload = TRUE) -->
+#' <!-- #install.packages("pacman", dependencies = TRUE) -->
+#' <!-- # ## install.packages("pacman") -->
+
+pacman::p_load(digest,
+               readxl,
+               readr,
+               dplyr,
+               tidyr,
+               ggplot2,
+               knitr,
+               MASS,
+               RCurl,
+               DT,
+               modelr,
+               broom,
+               purrr,
+               pROC,
+               data.table,
+               VIM,
+               gridExtra,
+               Metrics,
+               randomForest,
+               e1071,
+               corrplot,
+               DMwR2,
+               rsample,
+               skimr,
+               psych,
+               conflicted,
+               tree,
+               tidymodels,
+               janitor,
+               GGally,
+               tidyquant,
+               doParallel,
+               Boruta,
+               correlationfunnel,
+               naniar,
+               plotly,
+               themis,
+               questionr,
+               tidylog
+)
+
+# Loading from GitHub
+pacman::p_load_current_gh("agstn/dataxray")
+```
+
+```{r, echo = FALSE, include= FALSE, warning = FALSE, message = FALSE}
+
+#' <!-- #Loading libraries -->
+
+suppressPackageStartupMessages({
+    library(conflicted) # An Alternative Conflict Resolution Strategy
+    library(readxl) # read in Excel files
+    library(readr) # read in csv files
+    library(MASS) # Functions and datasets to support Venables and Ripley, "Modern Applied Statistics with S" (4th edition, 2002).
+    library(dplyr) # A Grammar of Data Manipulation
+    library(tidyr) # Tidy Messy Data
+    library(broom) # Convert Statistical Objects into Tidy Tibbles
+    library(ggplot2) # grammar of graphics for visualization
+    library(knitr) # A General-Purpose Package for Dynamic Report Generation in R
+    library(RCurl) # General Network (HTTP/FTP/...) Client Interface for R
+    library(DT) # A Wrapper of the JavaScript Library 'DataTables'
+    library(modelr) # Modelling Functions that Work with the Pipe
+    library(purrr) # Functional Programming Tools - helps with mapping (i.e., loops)
+    library(pROC) #	Display and Analyze ROC Curves
+    library(data.table) # Fast aggregation of large data (e.g. 100GB in RAM)
+    library(VIM) # Visualization and Imputation of Missing Values
+    library(gridExtra) # Miscellaneous Functions for "Grid" Graphics
+    library(Metrics) # Evaluation Metrics for Machine Learning
+    library(randomForest) # Breiman and Cutler's Random Forests for Classification and Regression
+    library(e1071) # Misc Functions of the Department of Statistics, Probability Theory Group (Formerly: E1071), TU Wien
+    library(corrplot) # Visualization of a Correlation Matrix
+    library(DMwR2) # Functions and Data for the Second Edition of "Data Mining with R"
+    library(rsample) # General Resampling Infrastructure
+    library(skimr) # Compact and Flexible Summaries of Data
+    library(psych) # Procedures for Psychological, Psychometric, and Personality Research
+    library(tree) # Classification and Regression Trees
+    library(tidymodels) # Easily Install and Load the 'Tidymodels' Packages
+    library(janitor) # Simple Tools for Examining and Cleaning Dirty Data
+    library(GGally) # Extension to 'ggplot2'
+    library(tidyquant) # Tidy Quantitative Financial Analysis
+    library(doParallel) # Foreach Parallel Adaptor for the 'parallel' Package
+    library(Boruta) # Wrapper Algorithm for All Relevant Feature Selection
+    library(correlationfunnel) # Speed Up Exploratory Data Analysis (EDA) with the Correlation Funnel
+    library(naniar) # viewing and handling missing data
+    library(plotly) # Create interactive plots
+    library(themis) # Upsampling and Downsampling methods for tidymodels
+    library(questionr) # this will give you odds ratios
+    library(tidylog, warn.conflicts = FALSE)
+})
+
+for (f in getNamespaceExports("tidylog")) {
+    conflicted::conflict_prefer(f, "tidylog", quiet = TRUE)
+}
+
+
+conflict_prefer("tune", "tune")
+```
+
+Set your `conflict_prefer`.
+
+```{r}
+conflict_prefer("select", "dplyr")
+conflict_prefer("tune", "tune")
+conflict_prefer("chisq.test", "stats")
+conflict_prefer("filter", "dplyr")
+conflict_prefer("skewness", "PerformanceAnalytics")
+conflict_prefer("fit", "parsnip")
+conflict_prefer("rmse", "yardstick")
+conflict_prefer("map", "purrr")
+conflict_prefer("vip", "vip")
+```
+
+Load helper functions
+
+```{r}
+#From Matt Dancho DS4B 201
+#Helps us make pretty graphs
+
+
+plot_ggpairs <- function(data, color = NULL, density_alpha = 0.5) {
+    
+    color_expr <- enquo(color)
+    
+    if (rlang::quo_is_null(color_expr)) {
+        
+        g <- data %>%
+            ggpairs(lower = "blank") 
+        
+    } else {
+        
+        color_name <- quo_name(color_expr)
+        
+        g <- data %>%
+            ggpairs(mapping = aes_string(color = color_name), 
+                    lower = "blank", legend = 1,
+                    diag = list(continuous = wrap("densityDiag", 
+                                                  alpha = density_alpha))) +
+            theme(legend.position = "bottom")
+    }
+    
+    return(g)
+    
+}
+
+#From Matt Dancho DS4B 201
+plot_hist_facet <- function(data, fct_reorder = FALSE, fct_rev = FALSE, 
+                            bins = 10, fill = palette_light()[[3]], color = "white", ncol = 5, scale = "free") {
+    
+    data_factored <- data %>%
+        mutate_if(is.character, as.factor) %>%
+        mutate_if(is.factor, as.numeric) %>%
+        gather(key = key, value = value, factor_key = TRUE) 
+    
+    if (fct_reorder) {
+        data_factored <- data_factored %>%
+            mutate(key = as.character(key) %>% as.factor())
+    }
+    
+    if (fct_rev) {
+        data_factored <- data_factored %>%
+            mutate(key = fct_rev(key))
+    }
+    
+    g <- data_factored %>%
+        ggplot(aes(x = value, group = key)) +
+        geom_histogram(bins = bins, fill = fill, color = color) +
+        facet_wrap(~ key, ncol = ncol, scale = scale) + 
+        theme_tq()
+    
+    return(g)
+    
+}
+```
+
+
+
+Bring in the data. This is the IBM HR data with 1470 observations we used before.
+
+```{r}
+# library(rsample)
+# data("attrition")
+# names(attrition)
+# 
+# Data <- attrition
+stringsAsFactors = TRUE
+library(readxl)
+Data <- read_excel("C:/Advanced Analytics Project/00_Data/WA_Fn-UseC_-HR-Employee-Attrition.xlsx")
+colnames(Data)
+
+str(Data)
+
+Data <- as.data.frame(unclass(Data)) #Change all strings from Character to Factor
+#From: https://stackoverflow.com/questions/20637360/convert-all-data-frame-character-columns-to-factors
+
+#numbers stay same, only strings change
+
+str(Data)
+```
+
+Let's put an ID variable in there in case we need it.
+
+```{r}
+Data <- Data %>% 
+    mutate(ID = row_number()) %>%
+  select(ID, everything())
+```
+
+
+# Exploratory Data Analysis (EDA) ----
+
+## Look at the Data
+
+First, let's check for duplicates.
+
+This code will check for a row that is a total duplicate (e.g. each row is included)
+
+```{r}
+sum(is.na(duplicated(Data)))
+```
+
+You should also check for duplicates down any column that should only have a single value (e.g. Employee ID).
+
+```{r}
+which(duplicated(Data$ID))
+```
+No duplicates here either.
+
+Here is a section on what to do if you need to know where duplicates are and how to remove them.
+
+```{r}
+# #Checking for and removing duplicate files
+# which(duplicated(Data$ID))
+# 
+# index <- which(duplicated(Data$ID))
+# 
+# Data_Clean <- Data[-index, ]
+# 
+# which(duplicated(Data$ID))
+# 
+# #Checking for duplicates on multiple columns
+# #Specifically on multiple entries per agent per month
+# which(duplicated(Data[c("Agent_ID", "Mo_Yr")]))
+# 
+# index <- which(duplicated(Data[c("Agent_ID", "Mo_Yr")]))
+# 
+# Data_Clean <- Data[-index, ]
+# 
+# which(duplicated(Data[c("Agent_ID", "Mo_Yr")]))
+```
+
+Let's take a glimpse at the data.
+
+```{r}
+glimpse(Data)
+```
+
+# Step 1: Data Summarization ----
+
+Let's use the `skimr` package and the function `skim`.
+
+```{r}
+skim(Data)
+```
+# Character Data Type
+
+```{r}
+Data %>%
+  select_if(is.character) %>%
+  glimpse()
+```
+
+```{r}
+conflict_prefer("filter", "dplyr")
+
+Data %>%
+    select_if(is.character) %>% #looking to see unique fields within a data sets (good for seeing if people have responded to all categories, etc.)
+    map(unique) #from purrr
+```
+
+```{r}
+Data %>%
+    select_if(is.character) %>%
+    map(table) #reminder to always get a count
+```
+
+```{r}
+# To get proportions
+Data %>%
+    select_if(is.character) %>%
+    map(~ table(.) %>% prop.table()) #anonymous function
+```
+
+Can we round that? You lose me after about 2 or 3 decimal places.
+
+```{r}
+# To get proportions
+# Rounded (From: https://stackoverflow.com/questions/43013016/how-to-create-multiple-frequency-tables-with-percentages-across-factor-variables)
+Data %>%
+    select_if(is.character) %>%
+    map(~ round(table(.) %>% prop.table(), 2)) #anonymous function
+```
+
+This also works! (Yay R...)
+
+```{r}
+# To get proportions
+# Rounded (From: https://stackoverflow.com/questions/43013016/how-to-create-multiple-frequency-tables-with-percentages-across-factor-variables)
+Data %>%
+    select_if(is.character) %>%
+    map(~round(prop.table(table(.x)),2))
+          
+```
+
+# Numeric Data
+
+The following will give us how many unique values are in each numeric variable. For instance we would expect a 1470 value for ID since these are supposed to be unique.
+
+```{r}
+Data %>%
+    select_if(is.numeric) %>%
+    map(~ unique(.) %>% length())
+```
+
+```{r}
+TEST <- Data %>%     #always use test to see if data works before you end up having to rewrite stuff.
+    select_if(is.numeric) %>%
+    map(~ unique(.) %>% length()) %>%
+  as.data.frame() # Creates a df in case we need to kick it out to Excel
+
+# Make it vertical and arrange descending
+TEST_melt <- TEST %>%
+  pivot_longer(everything()) %>%
+  arrange(desc(value))
+```
+
+
+It appears that `EmployeeNumber` is also a unique identifier, which makes sense. We will go ahead and keep ID since it goes by row and will make it easier to find if we need to go to, for example, ID 575. We will do some house keeping and move `EmployeeNumber` right after `ID` as the second column.
+
+```{r}
+Data <- Data %>%
+  select(ID, EmployeeNumber, everything())
+```
+
+```{r}
+Data %>%
+    select_if(is.numeric) %>%
+    map_df(~ unique(.) %>% length()) # tries to turn it into a df instead of a list
+```
+
+```{r}
+Data %>%
+    select_if(is.numeric) %>%
+    map_df(~ unique(.) %>% length()) %>% # tries to turn it into a df instead of a list
+    gather()
+```
+
+```{r}
+Data %>%
+    select_if(is.numeric) %>%
+    map_df(~ unique(.) %>% length()) %>% # tries to turn it into a df instead of a list
+    gather() %>%
+    arrange(desc(value)) # Move the largest value to the top and go descending 
+```
+Can we use the new `pivot_longer` function from `tidyr` like `gather` from `dplyr`?
+
+```{r, eval = FALSE}
+Data %>%
+    select_if(is.numeric) %>%
+    map_df(~ unique(.) %>% length()) %>% # tries to turn it into a df instead of a list
+    pivot_longer(everything()) %>% # Make sure to put `everything()` in
+    arrange(desc(value))
+```
+
+
+
+```{r}
+Data %>%
+    select_if(is.numeric) %>%
+    map_df(~ unique(.) %>% length()) %>% # tries to turn it into a df instead of a list
+    gather() %>%
+    arrange(value) # and here it goes smallest to largest
+```
+
+
+
+And finally `summary` and from the `psych` package, `describe`.
+
+```{r}
+summary(Data)
+
+conflict_prefer("describe", "psych")
+describe(Data)
+```
+
+And again that was not the `describe` function we wanted. Is there an easier way around this? Enter the `conflicted` package. You can read more about it [here](https://github.com/r-lib/conflicted).
+
+```{r}
+library(conflicted)
+```
+
+```{r}
+conflict_prefer("describe", "psych")
+describe(Data)
+```
+
+Check for continuous numeric variables.
+
+```{r}
+Data %>%
+    select_if(is.numeric) %>%
+    map_df(~ unique(.) %>% length()) %>% # tries to turn it into a df instead of a list
+    gather() %>%
+    arrange(value) %>%
+    filter(value > 10) #probably continuous if more than 10
+```
+Check for discrete numeric variables.
+
+```{r}
+Data %>%
+    select_if(is.numeric) %>%
+    map_df(~ unique(.) %>% length()) %>% # tries to turn it into a df instead of a list
+    gather() %>%
+    arrange(value) %>%
+    filter(value <= 10) #probably discrete if less than 10
+```
+
+# Step 2: Data Visualization ----
+
+```{r}
+Data %>%
+    select(Attrition, Age, Gender, MaritalStatus, NumCompaniesWorked, Over18, DistanceFromHome) %>%
+    ggpairs(progress = FALSE)
+
+```
+
+```{r}
+ conflict_prefer("tune", "tune")
+```
+
+
+```{r}
+Data %>%
+    select(Attrition, Age, Gender, MaritalStatus, NumCompaniesWorked, Over18, DistanceFromHome) %>%
+    ggpairs(aes(color = Attrition), lower = "blank", legend = 1,
+            diag = list(continuous = wrap("densityDiag", alpha = 0.5)), progress = FALSE) +
+    theme(legend.position = "bottom")
+
+```
+
+```{r}
+#From Matt Dancho DS4B 201 class
+plot_ggpairs <- function(data, color = NULL, density_alpha = 0.5) {
+    
+    color_expr <- enquo(color)
+    
+    if (rlang::quo_is_null(color_expr)) {
+        
+        g <- data %>%
+            ggpairs(lower = "blank") 
+        
+    } else {
+        
+        color_name <- quo_name(color_expr)
+        
+        g <- data %>%
+            ggpairs(mapping = aes_string(color = color_name), 
+                    lower = "blank", legend = 1,
+                    diag = list(continuous = wrap("densityDiag", 
+                                                  alpha = density_alpha))) +
+            theme(legend.position = "bottom")
+    }
+    
+    return(g)
+    
+}
+
+```
+
+```{r}
+Data %>%
+    select(Attrition, Age, Gender, MaritalStatus, NumCompaniesWorked, Over18, DistanceFromHome) %>%
+    plot_ggpairs(color = Attrition)
+```
+
+# Explore Features by Category
+
+# 1. Descriptive features: age, gender, marital status 
+
+```{r}
+
+Data %>%
+    select(Attrition, Age, Gender, MaritalStatus, NumCompaniesWorked, Over18, DistanceFromHome) %>%
+    plot_ggpairs(Attrition)
+```
+#   2. Employment features: department, job role, job level
+
+```{r}
+
+Data %>%
+    select(Attrition, contains("employee"), contains("department"), contains("job")) %>%
+    plot_ggpairs(Attrition) 
+```
+# 3. Compensation features: HourlyRate, MonthlyIncome, StockOptionLevel 
+
+```{r}
+
+Data %>%
+    select(Attrition, contains("income"), contains("rate"), contains("salary"), contains("stock")) %>%
+    plot_ggpairs(Attrition)
+```
+
+#   4. Survey Results: Satisfaction level, WorkLifeBalance 
+
+```{r}
+
+Data %>%
+    select(Attrition, contains("satisfaction"), contains("life")) %>%
+    plot_ggpairs(Attrition)
+```
+#   5. Performance Data: Job Involvment, Performance Rating
+
+```{r}
+
+Data %>%
+    select(Attrition, contains("performance"), contains("involvement")) %>%
+    plot_ggpairs(Attrition)
+```
+
+#   6. Work-Life Features 
+
+```{r}
+
+Data %>%
+    select(Attrition, contains("overtime"), contains("travel")) %>%
+    plot_ggpairs(Attrition)
+
+```
+
+#   7. Training and Education 
+
+```{r}
+
+Data %>%
+    select(Attrition, contains("training"), contains("education")) %>%
+    plot_ggpairs(Attrition)
+```
+
+#   8. Time-Based Features: Years at company, years in current role
+
+```{r}
+Data %>%
+    select(Attrition, contains("years")) %>%
+    plot_ggpairs(Attrition)
+```
+
+
+As we see in the Data:
+
+Observations: 1,470 with Variables: 35
+
+Class Label is Attrition with 1233 'No' and 237 'Yes' that shows the unbalance class label. We have to pay attention to the unbalanced class algorithm problems!
+
+Employee Count is equal 1 for all observations which cannot generate a useful value for this sample data. Maybe for the other sample of data will be with different values that should be considered for building the model in the future for other sets of data. In this analysis, we will remove it.
+
+Over 18 is equal to 'Y', which means an employee is not less than 18 years old. This attribute should be considered for the future, maybe by changing the rules of employment, young people under 18 can also work in companies. Here, according to the data set, we will remove it.
+
+Moreover, Standard Hours is equal 80 for all observations. The decision for this attribute is the same to Over18 and Employee Count. BusinessTravel, Department, EducationField, Gender, jobRole, MaritalStatus and OverTime are categorical data and other variables are continuous.
+
+Some of the variables are related to the years of working which can be a good candidate for feature generation. Some of variables are related to personal issues like WorkLifeBalance, RelationshipSatisfaction, JobSatisfaction,EnvironmentSatisfaction, etc.
+
+There are some variables that are related to the income like MonthlyIncome, PercentSalaryHike, etc.
+
+EmployeeNumber is a variable for identifying the specific employee. If we have more information about employee and the structure of the employee number, then we can extract some new features. But now it is not possible and we have to remove it from our data set.
+
+More and more, we have to investigate that, how the company objective factors influence in attrition employees, and what kind of working environment most will cause employees attrition.
+
+Check for Missing values.
+
+```{r}
+#new way! #Similar to our percentmissing function below, but our function adds nice features.
+apply(is.na(Data), 2, sum)
+```
+
+```{r}
+library(Amelia)
+missmap(Data, y.at=c(1), y.labels=c(''), col=c('yellow', 'black'))
+```
+
+Let's also take a look with a custom function `percentmissing`.
+
+```{r}
+percentmissing = function (x){ sum(is.na(x))/length(x) * 100}
+
+missing <- apply(Data, 1, percentmissing) # we will use an apply function to loop it. 1 indicates rows and 2 indicates columns
+
+table(missing)
+```
+
+We will also use the `VIM` package which helps with visualizing missing data. You can learn more [here](https://www.datacamp.com/community/tutorials/visualize-data-vim-package).
+
+```{r}
+VIM::aggr(Data)
+```
+Here is how we can do this with `naniar`.
+
+```{r}
+library(naniar)
+
+gg_miss_var(Data)
+```
+
+We have no missing data, but if we did, we could also look at an upset chart that shows which values are missing with other values.
+
+```{r, eval = FALSE}
+gg_miss_upset(Data)
+
+
+# Error in `as_shadow_upset()`:
+# ! upset plots for missing data requre at least two variables to have missing data, there are no missing values in your data! This is probably a good thing.
+# Backtrace:
+#  1. naniar::gg_miss_upset(Data)
+#  6. naniar::as_shadow_upset(.)
+# Error in as_shadow_upset(.) :
+```
+
+
+
+## No Missing Values, we are lucky
+
+Remove non value attributes
+
+These variables cannot play a significant role because they are same for all records.
+
+Also, EmployeeNumber can be accepted as an indicator for the time of join to the company which can be used for new feature generation, but since we do not have any meta data about it, we will remove it.
+
+```{r}
+cat("Data Set has ",dim(Data)[1], " Rows and ", dim(Data)[2], " Columns" )
+```
+
+# More Data visualization
+
+If `GGally` just wasn't working for your visually, we will also step through some additional ways to look at the data below.
+
+The important take home message is "get to know your data really well" and "visualize the data in case something pops out that otherwise may have remained hidden". Remember [Anscombe's quartet](https://rpubs.com/turnersd/anscombe) and [The Datasaurus Dozen](https://blog.revolutionanalytics.com/2017/05/the-datasaurus-dozen.html).
+
+## Visualization of Attrition
+
+```{r}
+Data %>%
+        group_by(Attrition) %>%
+        tally() %>%
+        ggplot(aes(x = Attrition, y = n,fill=Attrition)) +
+        geom_bar(stat = "identity") +
+        theme_minimal() +
+        labs(x="Attrition", y="Count of Attrition") +
+        ggtitle("Attrition") +
+        geom_text(aes(label = n), vjust = -0.5, position = position_dodge(0.9))
+```
+
+
+As we see here, 237/1470 = 0.16 or 16% of the data label shows the "Yes" in Attrition. this problem should be handled during data processing (cleaning) because an unbalanced dataset will bias the prediction model towards the more common class (here it is 'NO'). There are different approaches for dealing with unbalanced data in machine learning like using more data (here that is not possible), Resampling, changing the machine performance metric, using various algorithms, etc. We'll revisit this later.
+
+
+```{r}
+ggplot(data=Data, aes(Age)) + 
+        geom_histogram(breaks=seq(20, 50, by=2), 
+                       col="red", 
+                       aes(fill=..count..))+
+        labs(x="Age", y="Count")+
+        scale_fill_gradient("Count", low="green", high="blue")
+```
+
+As we see above, the majority of employees are between 28-36 years. 34-36 years old are very popular.
+
+### Attrition by Travel Frequency
+
+```{r}
+a1 <- Data %>%
+        group_by(BusinessTravel) %>%
+        tally() %>%
+        ggplot(aes(x = BusinessTravel, y = n,fill=BusinessTravel)) +
+        geom_bar(stat = "identity") +
+        theme_minimal()+
+        labs(x="Business Travel", y="Number Attriation")+
+        ggtitle("Attrition according to the Business Travel")+
+        geom_text(aes(label = n), vjust = -0.5, position = position_dodge(0.9)) +
+    ylim(0,1200)
+
+a2<- Data %>%
+        group_by(BusinessTravel, Attrition) %>%
+        tally() %>%
+        ggplot(aes(x = BusinessTravel, y = n,fill=Attrition)) +
+        geom_bar(stat = "identity") +
+        theme_minimal()+
+        labs(x="Business Travel", y="Number Attriation")+
+        ggtitle("Attrition according to the Business Travel")+
+        geom_text(aes(label = n), vjust = -0.5, position = position_dodge(0.9))
+
+
+grid.arrange(a1,a2)
+```
+
+Here is the distribution of the data according to the Business Travel situation. More than 70% of employees travel rarely where just 10% of them have no travel.
+
+```{r}
+Data %>%
+        ggplot(aes(x = BusinessTravel, group = Attrition)) + 
+        geom_bar(aes(y = ..prop.., fill = factor(..x..)), 
+                 stat="count", 
+                 alpha = 0.7) + #transparency of the graph
+        geom_text(aes(label = scales::percent(..prop..), y = ..prop.. ), 
+                  stat= "count", 
+                  vjust = 1.5) + #adjust the lable (-1.5 would be above the graph)
+        labs(y = "Percentage", fill= "business Travel") +
+        facet_grid(~Attrition) +
+        theme_minimal()+
+        theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) + 
+        ggtitle("Attrition")
+```
+
+### Attrition by Department
+
+```{r}
+g1 <- Data %>%
+        group_by(Department) %>%
+        tally() %>%
+        ggplot(aes(x = Department, y = n,fill=Department)) +
+        geom_bar(stat = "identity") +
+        theme_minimal()+
+        geom_text(aes(label = n), vjust = -0.1, position = position_dodge(0.9)) +
+    ylim(0,1100)
+
+g2 <- Data %>%
+        group_by(Department, Attrition) %>%
+        tally() %>%
+        ggplot(aes(x = Department, y = n,fill=Attrition)) +
+        geom_bar(stat = "identity") +
+        theme_minimal()+
+        geom_text(aes(label = n), vjust = -0.1, position = position_dodge(0.9))
+
+grid.arrange(g1,g2)
+```
+
+### Attrition by Education Level
+
+```{r}
+g1<- Data %>%
+        ggplot(aes(x = Education, group = Attrition)) + 
+        geom_bar(aes(y = ..prop.., fill = factor(..x..)), 
+                 stat="count", 
+                 alpha = 0.7) +
+        geom_text(aes(label = scales::percent(..prop..), y = ..prop.. ), 
+                  stat= "count", 
+                  vjust = -0.5) +
+        labs(y = "Percentage", fill= "Education") +
+        facet_grid(~Attrition) +
+        theme_minimal()+
+        theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) + 
+        ggtitle("Attrition") +
+    ylim(0, 0.5)
+
+g2<- Data %>%
+        group_by(Education, Attrition) %>%
+        tally() %>%
+        ggplot(aes(x = Education, y = n,fill=Attrition)) +
+        geom_bar(stat = "identity") +
+        theme_minimal()+
+        geom_text(aes(label = n), vjust = -0., position = position_dodge(0.9))+
+        labs(x="Education", y="Number Attriation")+
+        ggtitle("Attrition in regards to Education Level")
+
+grid.arrange(g1,g2)
+```
+
+### Attrition by Gender
+
+```{r}
+Data %>%
+        ggplot(aes(x = Gender, group = Attrition)) + 
+        geom_bar(aes(y = ..prop.., fill = factor(..x..)), 
+                 stat="count", 
+                 alpha = 0.7) +
+        geom_text(aes(label = scales::percent(..prop..), y = ..prop.. ), 
+                  stat= "count", 
+                  vjust = -.5) +
+        labs(y = "Percentage", fill= "Gender") +
+        facet_grid(~Attrition) +
+        theme_minimal()+
+        theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) + 
+        ggtitle("Attrition") +
+    ylim(0,0.7)
+```
+
+### Attrition by Marital Status
+
+```{r}
+Data %>%
+        ggplot(aes(x = MaritalStatus, group = Attrition)) + 
+        geom_bar(aes(y = ..prop.., fill = factor(..x..)), 
+                 stat="count", 
+                 alpha = 0.7) +
+        geom_text(aes(label = scales::percent(..prop..), y = ..prop.. ), 
+                  stat= "count", 
+                  vjust = -.5) +
+        labs(y = "Percentage", fill= "MaritalStatus") +
+        facet_grid(~Attrition) +
+        theme_minimal()+
+        theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) + 
+        ggtitle("Attrition") + 
+    ylim(0, 0.55)
+```
+
+### Attrition in regards to Monthly Income
+
+```{r}
+Data %>%
+        ggplot(mapping = aes(x = MonthlyIncome)) + 
+        geom_histogram(aes(fill = Attrition), bins=20)+
+        labs(x="Monthly Income", y="Number Attriation")+
+        ggtitle("Attrition in regards to Monthly Income")
+```
+
+### Attrition in regards to Overtime
+
+```{r}
+g1 <-Data %>%
+        ggplot(aes(x = OverTime, group = Attrition)) + 
+        geom_bar(aes(y = ..prop.., fill = factor(..x..)), 
+                 stat="count", 
+                 alpha = 0.7) +
+        geom_text(aes(label = scales::percent(..prop..), y = ..prop.. ), 
+                  stat= "count", 
+                  vjust = 0.3) +
+        labs(y = "Percentage", fill= "OverTime") +
+        facet_grid(~Attrition) +
+        theme_minimal()+
+        theme(legend.position = "none", plot.title = element_text(hjust = 0.3)) + 
+        ggtitle("Attrition") +
+    ylim(0, 0.8)
+
+
+g2 <-Data %>%
+        group_by(OverTime, Attrition) %>%
+        tally() %>%
+        ggplot(aes(x = OverTime, y = n,fill=Attrition)) +
+        geom_bar(stat = "identity") +
+        theme_minimal()+
+        geom_text(aes(label = n), vjust = -0.3, position = position_dodge(0.9))+
+        labs(x="Over time", y="Number Attriation")+
+        ggtitle("Attrition in regards to Over time")
+
+grid.arrange(g1,g2)
+```
+
+### Attrition by Work Life Balance rating
+
+```{r}
+g1<-Data %>%
+        ggplot(aes(x = WorkLifeBalance, group = Attrition)) + 
+        geom_bar(aes(y = ..prop.., fill = factor(..x..)), 
+                 stat="count", 
+                 alpha = 0.7) +
+        geom_text(aes(label = scales::percent(..prop..), y = ..prop.. ), 
+                  stat= "count", 
+                  vjust = -.5) +
+        labs(y = "Percentage", fill= "WorkLifeBalance") +
+        facet_grid(~Attrition) +
+        theme_minimal()+
+        theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) + 
+        ggtitle("Attrition") + 
+    ylim(0, 0.7)
+
+g2<- Data %>%
+        group_by(WorkLifeBalance, Attrition) %>%
+        tally() %>%
+        ggplot(aes(x = WorkLifeBalance, y = n,fill=Attrition)) +
+        geom_bar(stat = "identity") +
+        theme_minimal()+
+        geom_text(aes(label = n), vjust = -0.5, position = position_dodge(0.9))+
+        labs(x="  Work Life Balance", y="Number Attriation")+
+        ggtitle("Attrition in regards to  Work Life Balance")
+grid.arrange(g1,g2)
+```
+
+
+# Preprocess with the data
+
+If possible, you want to do all of your data preprocessing within `recipes` to leave the original data untouched. This makes it as easy as possible to pass the raw data into any of the `recipes` you create for your various models. You will need to play around with this and fully understand what is happening when you pass the data in `recipes`. This will also help you to find the limitations of the `recipes` package and determine what needs to happen outside of the package.
+
+Here is a general guide for the order to do your steps which we will reiterate below specifically for the `recipes` package.
+
+1. Impute
+2. Handle factor levels
+3. Individual transformations for skewness and other issues
+4. Discretize (if needed and if you have no other choice)
+5. Create dummy variables
+6. Create interactions
+7. Normalization steps (center, scale, range, etc)
+8. Multivariate transformation (e.g. PCA, spatial sign, etc)
+
+## Impute
+
+Since we have no missing data, we don't need to impute. If we did, we would do that first. Remember, we need to impute on the Training Data and the Test Data separately so we don't have data leakage. If we imputed the median from all of the data or from the Training Data to the Test Data, the Test Data would have information it would not really have in a real world example where the data the model is exposed to is totally fresh and has never been seen by the model before.
+
+## Handle factor levels
+
+We will need to determine if any of our data needs to be turned into a factor. What we are looking for is data that should have a specific order to it (think education level, age group, etc.). The `recipes` package has steps called `step_string2factor` and `step_num2factor`, but I've had trouble with those as they seem to want to assign the same number of levels to all strings or numbers fed into them.
+
+```{r}
+glimpse(Data)
+```
+
+```{r}
+Data %>% 
+  distinct(BusinessTravel)
+```
+
+
+```{r}
+TEST <- Data %>%
+  mutate(BusinessTravel = factor(BusinessTravel,
+                                 levels = c("Non-Travel",
+                                            "Travel_Rarely",
+                                            "Travel_Frequently")))
+#usually done before data visualization just to have the order make sense
+glimpse(TEST)
+```
+
+```{r}
+class(TEST$BusinessTravel)
+unique(TEST$BusinessTravel)
+```
+
+
+Now we can see that instead of a character, `BusinessTravel` is a factor and `unique` will tell us the order of the levels. Let's run the syntax again and commit it to `Data` since we know it is doing what we want it to do and we will also turn `Attrition` into a factor as many of the models need the outcome variable to be a factor.
+
+```{r}
+Data <- Data %>%
+  mutate(BusinessTravel = factor(BusinessTravel,
+                                 levels = c("Non-Travel",
+                                            "Travel_Rarely",
+                                            "Travel_Frequently"))) %>%
+  mutate(Attrition = as.factor(Attrition))
+```
+
+Check to see if it actually is a factor.
+
+```{r}
+glimpse(Data)
+```
+
+Yes it is.
+
+Now let's get into `recipes`.
+
+## Recipes
+
+Here are some potentially helpful links to learn more about `recipes`.
+
+* (https://www.tidymodels.org/start/recipes/)
+
+* (https://itamarcaspi.rbind.io/post/recipes-for-dummies/)
+
+* LIME and Tidymodels on `attrition` data. (https://algotech.netlify.app/blog/interpreting-classification-model-with-lime/)
+
+We will now introduce you to `recipes`.
+
+`recipes` is a general data preprocessor with a modern interface. It can create model matrices that incorporate feature engineering, imputation, and other help tools.
+
+To build a recipe:
+1. Start the `recipe()`
+2. Define the variables involved
+3. Describe preprocessing step-by-step
+
+`recipe()` - Creates a recipe for a set of variables
+
+```{r, eval = FALSE}
+#Creates a recipe for a set of variables
+recipe(Attrition ~ ., data = Data) #dot means everything
+```
+
+### Steps
+
+`step_*()` - Adds a single transformation to a recipe. Transformations are replayed in order when the recipe is run on data.
+
+Complete list at: (https://tidymodels.github.io/recipes/reference/index.html)
+
+```{r, eval = FALSE}
+rec %>% 
+  step_novel(all_nominal()) %>%
+  step_zv(all_predictors())
+```
+
+Ordering of the steps matters! See the [guide to ordering of steps here](https://recipes.tidymodels.org/articles/Ordering.html).
+
+While every individual project’s needs are different, here is a suggested order of potential steps that should work for most problems:
+
+1. Impute
+2. Handle factor levels
+3. Individual transformations for skewness and other issues
+4. Discretize (if needed and if you have no other choice)
+5. Create dummy variables
+6. Create interactions
+7. Normalization steps (center, scale, range, etc)
+8. Multivariate transformation (e.g. PCA, spatial sign, etc)
+
+### Selectors
+
+Helper functions for selecting sets of variables.
+
+
+```{r, eval = FALSE}
+rec %>% 
+  step_novel(all_nominal()) %>%
+  step_zv(all_predictors())
+```
+
+* all_predictors() - Each x variable (right side of ~)
+
+* all_outcomes() - Each y variable (left side of ~)
+
+* all_numeric() - Each numeric variable
+
+* all_nominal() - Each categorical variable (e.g. factor, string)
+
+### Combining selectors
+
+Use commas to separate.
+
+```{r, eval = FALSE}
+rec %>% 
+  step_novel(all_nominal(), -all_outcomes()) %>%
+  step_zv(all_predictors())
+```
+
+## Quiz
+
+How does recipes know what is a *predictor* and what is an *outcome*?
+
+```{r, eval = FALSE}
+recipe(Attrition ~ ., data = Data)
+```
+
+## Answer
+
+The formula indicates outcomes vs predictors
+
+## Quiz
+
+How does `recipes` know what is *numeric* and what is *nominal*?
+
+```{r, eval = FALSE}
+recipe(Attrition ~ ., data = Data)
+```
+
+The data is only used to catalog the names and types of each variable.
+
+### Manually alter roles
+
+Can I manually alter the roles if needed? Yes!
+
+* `add_role`
+* `update_role`
+* `remove_role`
+
+## Data normalization before or after train-test split?
+
+(Link)[https://datascience.stackexchange.com/questions/54908/data-normalization-before-or-after-train-test-split]
+
+Normalization across instances should be done after splitting the data between training and test set, using only the data from the training set.
+
+This is because the test set plays the role of fresh unseen data, so it's not supposed to be accessible at the training stage. Using any information coming from the test set before or during training is a potential bias in the evaluation of the performance.
+
+The reason is to avoid any data leakage.
+
+Data Leakage:
+
+Data leakage is when information from outside the training dataset is used to create the model. This additional information can allow the model to learn or know something that it otherwise would not know and in turn invalidate the estimated performance of the model being constructed.
+
+You can read about it here : (https://machinelearningmastery.com/data-leakage-machine-learning/)
+
+## Training and Test Data 
+
+Ok, let's split the data.
+
+```{r}
+set.seed(2020)
+data_split <- initial_split(Data, prop = 0.75)
+
+train_data <- training(data_split)
+
+test_data <- testing(data_split)
+
+```
+
+Before we go on, let's make sure that our target variable `Attrition` has roughly the same proportion in the `train_data` and `test_data` as it did in the original `Data`.
+
+```{r}
+tabyl(Data$Attrition)
+```
+
+About 16% in the original data.
+
+```{r}
+tabyl(train_data$Attrition)
+```
+
+```{r}
+tabyl(test_data$Attrition)
+```
+
+Both are roughly around 16% which may be acceptable, but let's see if there is a way to get them even more similar.
+
+Let's go ahead and run it again incorporating the `strata` argument to see how they differ, if at all.
+
+```{r}
+set.seed(2020)
+data_split <- initial_split(Data, prop = 0.75, strata = "Attrition")
+
+train_data <- training(data_split)
+
+test_data <- testing(data_split)
+
+tabyl(train_data$Attrition)
+
+tabyl(test_data$Attrition)
+```
+
+Those are a bit closer to each other which is very much in line with the ~16.1% from the original Data. Remember to incorporate the `strata` argument if your outcome variable isn't roughly 50% and maybe even then, just to be safe.
+
+## Solving the unbalanced problem
+
+We know we have an unbalanced problem with Yes for attrition (~16% vs 84% for No). One way to remedy this is with Synthetic Minority Over-sampling Technique [(SMOTE)](https://arxiv.org/pdf/1106.1813.pdf). In order to plug in the needed values for the percent to over sample and the percent to under sample, we need to determine those first.
+
+We could also use upsampling, downsampling, Adasyn, etc. Learn these and what to use when and why.
+
+I do want you to remember that you ONLY APPLY THE REBALANCING METHOD TO YOUR TRAINING DATA!!! The reason we do this is because the algorithms are "greedy" and a bit "lazy". If they find a path to maximize accuracy, they will go for it. If that is what you are looking for, then great, but if you are trying to predict "True Negatives" or "Specificity" then you will be in trouble. This is why we need to boost the Attrition_Yes class so that the algorithms get a better look at what those look like and get better at predicting them. However, remember our ultimate goal is to make future predictions on unseen data. Your future unseen data will probably also have Attrition_Yes at around 16% or so. That is why we keep our proxy future set of unseen data we call "test" as un-preprocessed as possible. We want it to resemble the real world data we will actually be predicting on as much as possible. That is what we are trying to accomplish with the `step_downsample(all_outcomes(), skip = TRUE)` later on in our `recipe`. The `skip = TRUE` is supposed to apply the downsample to the train data, but not the test data.
+
+Anyway, on to cross-validation for now as we begin building our `recipe`.
+
+## Cross Validation V-Folds creation
+
+Now to go ahead and create our splits to use in modeling later.
+
+```{r}
+set.seed(2020)
+cv_folds <- vfold_cv(train_data, v = 10, strata = "Attrition") #We'll need to remember this later.
+```
+
+### NOTE: Group V-fold cross-validation
+[Group V-fold cross-validation](https://rsample.tidymodels.org/reference/group_vfold_cv.html) creates splits of the data based on some grouping variable (which may have more than a single row associated with it). The function can create as many splits as there are unique values of the grouping variable or it can create a smaller set of splits where more than one group is left out at a time. A common use of this kind of resampling is when you have repeated measures of the same subject.
+```{r, eval = FALSE}
+group_vfold_cv(
+  data,
+  group = NULL,
+  v = NULL,
+  repeats = 1,
+  balance = c("groups", "observations"),
+  ...,
+  strata = NULL,
+  pool = 0.1
+)
+
+data(ames, package = "modeldata")
+
+set.seed(123)
+group_vfold_cv(ames, group = Neighborhood, v = 5)
+#> # Group 5-fold cross-validation 
+#> # A tibble: 5 × 2
+#>   splits             id       
+#>   <list>             <chr>    
+#> 1 <split [2449/481]> Resample1
+#> 2 <split [2642/288]> Resample2
+#> 3 <split [2218/712]> Resample3
+#> 4 <split [2367/563]> Resample4
+#> 5 <split [2044/886]> Resample5
+group_vfold_cv(
+  ames,
+  group = Neighborhood,
+  v = 5,
+  balance = "observations"
+)
+#> # Group 5-fold cross-validation 
+#> # A tibble: 5 × 2
+#>   splits             id       
+#>   <list>             <chr>    
+#> 1 <split [2366/564]> Resample1
+#> 2 <split [2279/651]> Resample2
+#> 3 <split [2361/569]> Resample3
+#> 4 <split [2361/569]> Resample4
+#> 5 <split [2353/577]> Resample5
+group_vfold_cv(ames, group = Neighborhood, v = 5, repeats = 2)
+#> # Group 5-fold cross-validation 
+#> # A tibble: 10 × 3
+#>    splits             id      id2      
+#>    <list>             <chr>   <chr>    
+#>  1 <split [2077/853]> Repeat1 Resample1
+#>  2 <split [2215/715]> Repeat1 Resample2
+#>  3 <split [2392/538]> Repeat1 Resample3
+#>  4 <split [2574/356]> Repeat1 Resample4
+#>  5 <split [2462/468]> Repeat1 Resample5
+#>  6 <split [2269/661]> Repeat2 Resample1
+#>  7 <split [2426/504]> Repeat2 Resample2
+#>  8 <split [2354/576]> Repeat2 Resample3
+#>  9 <split [2547/383]> Repeat2 Resample4
+#> 10 <split [2124/806]> Repeat2 Resample5
+```
+
+
+## Create recipe and roles
+
+Let's initiate a new recipe:
+
+```{r}
+recipe_obj <- 
+  recipe(Attrition ~., data = train_data)
+```
+
+And we'll take a look with `summary`.
+
+```{r}
+summary(recipe_obj)
+```
+Now scroll all the way over to page 4 to see `Attrition` in the role of outcome.
+
+Notice how `ID` and `EmployeeNumber` is listed with the role of `predictor` instead of `ID`.
+
+We will now change that.
+
+```{r}
+recipe_obj <- 
+  recipe(Attrition ~., data = train_data) %>%
+  update_role(ID, EmployeeNumber, new_role = "ID
+              ")
+
+summary(recipe_obj)
+```
+The role for `ID` and `EmployeeNumber` now say "ID".
+
+# Data Preprocessing with Recipes ----
+
+Plan: From Recipes Package
+1. Impute
+2. Handle factor levels
+3. Individual transformations for skewness and other issues
+4. Discretize (if needed and if you have no other choice)
+5. Create dummy variables
+6. Create interactions
+7. Normalization steps (center, scale, range, etc)
+8. Multivariate transformation (e.g. PCA, spatial sign, etc)
+
+# Plan: Correlation Analysis
+
+# Feature Selection
+
+## Correlation Funnel
+
+```{r}
+class(train_data$Attrition)
+```
+gotta get our factors
+
+```{r}
+library(correlationfunnel)
+
+hr_data_tbl <- train_data %>%
+    drop_na()
+
+#dropping employee number and ids, can tell because of the minus in the front
+hr_corr_tbl <- hr_data_tbl %>%
+    select(-EmployeeNumber,
+           -ID) %>%
+    binarize(n_bins = 5,  
+             thresh_infreq = 0.01, 
+             name_infreq = "OTHER", 
+             one_hot = TRUE) %>% 
+    correlate(Attrition__Yes)
+```
+
+```{r}
+library(plotly)
+
+hr_corr_tbl %>%
+    plot_correlation_funnel() %>%
+    ggplotly()
+```
+#can make it an html to keep it interactive, but either way you can knit it into an HTML to do cool things like elicit f bombs
+Typically a good cutoff point for anything that will be included in your model is around 0.10. We can also have `Boruta` weigh in on this.
+
+## Boruta
+
+Now we will run Boruta. Learn more about Boruta [here](https://towardsdatascience.com/boruta-explained-the-way-i-wish-someone-explained-it-to-me-4489d70e154a). This is where we get the below information.
+
+Boruta is a feature selection algorithm which is statistically grounded and works extremely well even without any specific input by the user. How is that even possible?
+
+Boruta is based on two brilliant ideas.
+
+### The first idea: shadow features
+In Boruta, features do not compete among themselves. Instead — and this is the first brilliant idea — they compete with a randomized version of them.
+
+In practice, starting from X, another dataframe is created by randomly shuffling each feature. These permuted features are called shadow features. At this point, the shadow dataframe is attached to the original dataframe to obtain a new dataframe (we will call it X_boruta), which has twice the number of columns of X.
+
+Then, a random forest is fitted on X_boruta and y.
+
+Now, we take the importance of each original features and compare it with a threshold. This time, the threshold is defined as the highest feature importance recorded among the shadow features. When the importance of a feature is higher than this threshold, this is called a “hit”. The idea is that a feature is useful only if it’s capable of doing better than the best randomized feature.
+
+### The second idea: binomial distribution
+As often happens in machine learning (in life?), the key is iteration. Not surprisingly, 20 trials are more reliable than 1 trial and 100 trials are more reliable than 20 trials.
+
+Now, how do we set a decision criterion? This is the second brilliant idea contained in Boruta.
+
+Let’s take a feature and say we have absolutely no clue if it’s useful or not. What is the probability that we shall keep it? The maximum level of uncertainty about the feature is expressed by a probability of 50%, like tossing a coin. Since each independent experiment can give a binary outcome (hit or no hit), a series of n trials follows a binomial distribution.
+
+In Boruta, there is not a hard threshold between a refusal and an acceptance area. Instead, there are 3 areas:
+
+* an area of refusal: the features that end up here are considered as noise, so they are dropped;
+* an area of irresolution: Boruta is indecisive about the features that are in this area;
+* an area of acceptance: the features that are here are considered as predictive, so they are kept.
+
+The areas are defined by selecting the two most extreme portions of the distribution called tails of the distribution (in our example each tail accounts for 0.5% of the distribution).
+
+### Boruta Conclusion
+Feature selection is a decisive part of a machine learning pipeline: being too conservative means introducing unnecessary noise, while being too aggressive means throwing away useful information.
+
+We have seen how to use Boruta for performing a robust, statistically grounded feature selection on your dataset. Indeed, making substantial decisions about features is critical to ensure the success of your predictive model.
+
+```{r}
+# Run Boruta over training data for feature selection
+# From: https://www.analyticsvidhya.com/blog/2016/03/select-important-variables-boruta-package/
+
+set.seed(2023)
+
+library(Boruta)
+#only running boruta on training dataset, maybe kick some more stuff out after.
+boruta_df <- train_data %>%
+    select(-EmployeeNumber,
+           -ID) %>%
+    mutate_if(is.character, as.factor)
+
+boruta_train <- Boruta(Attrition~., data = boruta_df, doTrace = 2) # doTrace: It refers to verbosity level. 0 means no tracing. 1 means reporting attribute decision as soon as it is cleared. 2 means all of 1 plus additionally reporting each iteration. Default is 0.
+
+print(boruta_train)
+
+
+# Boruta performed 99 iterations in 54.46777 secs.
+#  16 attributes confirmed important: Age, BusinessTravel, EnvironmentSatisfaction, JobInvolvement, JobLevel and 11 more;
+#  15 attributes confirmed unimportant: DailyRate, DistanceFromHome, Education, EducationField, EmployeeCount and 10 more;
+#  2 tentative attributes left: Department, YearsSinceLastPromotion;
+
+
+```
+### Visualize Boruta
+
+```{r}
+plot(boruta_train, xlab = "", xaxt = "n")
+
+lz <- lapply(1:ncol(boruta_train$ImpHistory), function(i)
+    boruta_train$ImpHistory[is.finite(boruta_train$ImpHistory[,i]),i])
+
+names(lz) <- colnames(boruta_train$ImpHistory)
+
+Labels <- sort(sapply(lz, median))
+
+axis(side = 1, las = 2, labels = names(Labels),
+     at = 1:ncol(boruta_train$ImpHistory), cex.axis = 0.7)
+```
+Now we will run TenativeRoughFix in order to make Boruta decide on any of the tentative attributes above.
+
+```{r}
+final_boruta <- TentativeRoughFix(boruta_train)
+
+print(final_boruta)
+
+# Boruta performed 99 iterations in 54.46777 secs.
+# Tentatives roughfixed over the last 99 iterations.
+#  18 attributes confirmed important: Age, BusinessTravel, Department, EnvironmentSatisfaction, JobInvolvement and 13 more;
+#  15 attributes confirmed unimportant: DailyRate, DistanceFromHome, Education, EducationField, EmployeeCount and 10 more;
+```
+
+Which features made the cut to be included in the model?
+
+```{r}
+# It's time for results now. Let's obtain the list of confirmed attributes
+
+cat(getSelectedAttributes(final_boruta, withTentative = F), sep = "\n")
+
+# Age
+# BusinessTravel
+# Department
+# EnvironmentSatisfaction
+# JobInvolvement
+# JobLevel
+# JobRole
+# JobSatisfaction
+# MaritalStatus
+# MonthlyIncome
+# NumCompaniesWorked
+# OverTime
+# StockOptionLevel
+# TotalWorkingYears
+# YearsAtCompany
+# YearsInCurrentRole
+# YearsSinceLastPromotion
+# YearsWithCurrManager
+```
+
+Below we can step through what made the cut and what didn't.
+
+```{r}
+# We'll create a data frame of the final result derived from Boruta.
+
+boruta_df <- attStats(final_boruta)
+class(boruta_df)
+# [1] "data.frame"
+print(boruta_df)
+```
+We will keep the Data intact for now, but after working through the various `recipe` preocesses below, we will create the df using the features recommended by `Boruta` and then create the new resampling folds as well.
+
+
+1. Zero Variance Features ----
+
+```{r}
+recipe_obj <- recipe(Attrition ~ ., data = train_data) %>%
+    step_zv(all_predictors()) #looking for zero variance
+```
+
+
+```{r}
+recipe_obj
+```
+
+```{r}
+recipe_obj %>% 
+    prep()
+```
+
+Notice that we have no missing data and `EmployeeCount`, `Over18`, and `StandardHours` were flagged as having Zero Variance (i.e. all the same values)
+
+Would `step_nzv` have also picked those up?
+
+```{r}
+recipe_obj <- recipe(Attrition ~ ., data = train_data) %>%
+    step_nzv(all_predictors()) #looking for zero variance
+ 
+recipe_obj %>%
+  prep()
+```
+It did! Research further the differences between `step_zv` and `step_nzv`.
+
+```{r}
+recipe_obj %>% 
+    prep() %>%
+    bake(new_data = train_data)
+```
+
+Notice that if we look at the columns, EmployeeCount, Over18, StandardHours, are missing. They are still in our original `Data`, but `recipes` has removed them as part of the process of the data it will use downstream.
+
+# 2. Transformations ----
+
+```{r}
+train_data %>%
+    select_if(is.numeric) %>%
+    map_df(skewness) %>%
+    gather(factor_key = TRUE) %>%
+    arrange(desc(value))
+```
+We'll run that again with a filter on skewness of greater than 0.8. We arrived at this value because `PercentSalaryHike` has a skewness value of 0.819 and the next highest value is `TrainingTimesLastYear` at 0.591.
+
+
+```{r}
+train_data %>%
+    select_if(is.numeric) %>%
+    map_df(skewness) %>%
+    gather(factor_key = TRUE) %>%
+    arrange(desc(value)) %>%
+    filter(value >= 0.8) %>% #decided on this number by dropoff to next lowest value and visual inspection of graph
+    pull(key) %>%
+    as.character()
+```
+
+
+
+```{r}
+skewed_feature_names <- train_data %>%
+    select_if(is.numeric) %>%
+    map_df(skewness) %>%
+    gather(factor_key = TRUE) %>%
+    arrange(desc(value)) %>%
+    filter(value >= 0.8) %>% #decided on this number by dropoff to next lowest value and visual inspection of graph
+    pull(key) %>%
+    as.character()
+```
+
+```{r}
+train_data %>%
+    select(skewed_feature_names) %>%
+    plot_hist_facet()
+```
+Ok, it looks like `JobLevel` and `StockOptionLevel` may actually be factors.
+
+```{r}
+#Need to remove 2 of the features
+!skewed_feature_names %in% c("JobLevel", "StockOptionLevel")
+
+skewed_feature_names <- train_data %>%
+    select_if(is.numeric) %>%
+    map_df(skewness) %>%
+    gather(factor_key = TRUE) %>%
+    arrange(desc(value)) %>%
+    filter(value >= 0.8) %>% #decided on this number by dropoff to next lowest value and visual inspection of graph
+    filter(!key %in% c("JobLevel", "StockOptionLevel")) %>%
+    pull(key) %>%
+    as.character()
+
+```
+
+Check to see the JobLevel and StockOptionLevel have been removed.
+```{r}
+skewed_feature_names
+```
+
+```{r}
+library(tidymodels)
+library(dplyr)
+
+# Define the desired levels for each factor
+job_levels <- c("0", "1", "2", "3", "4", "5") #dummy coding all the job levels
+stock_option_levels <- c("0", "1", "2", "3") #dummy coding all of the stock option levels
+
+# Create the recipe
+recipe_obj <- recipe(Attrition ~ ., data = train_data) %>%   #making recipe
+  update_role(ID, EmployeeNumber, new_role = "ID") %>% #changing role to ID
+  # Apply Yeo-Johnson transformation to skewed numeric features
+  step_YeoJohnson(all_of(skewed_feature_names)) %>% # using YJ as a robust way to normalize skew
+  # Remove zero and near-zero variance features
+  step_zv(all_predictors()) %>%
+  step_nzv(all_predictors()) %>%
+  # Normalize numeric features
+  step_normalize(all_numeric(), -all_outcomes()) %>% #normalizing numeric values but not the outcome variables commented out cuz it messes with tables
+  # Convert JobLevel and StockOptionLevel to factors with specific levels
+  step_mutate(JobLevel = factor(JobLevel, levels = job_levels)) %>% #converting joblevel and stockoptionlevel to factors with specific levels
+  step_mutate(StockOptionLevel = factor(StockOptionLevel, levels = stock_option_levels)) #see above
+
+# Print the recipe to verify steps
+recipe_obj
+
+# Prepare the recipe with training data
+prepared_recipe <- prep(recipe_obj, training = train_data)
+
+# Apply the recipe to the training data
+train_processed <- bake(prepared_recipe, new_data = NULL) #only if we need to kick it out for visualizing it
+
+# View the processed training data
+head(train_processed)
+#data has normalized ID and employee number which it was not supposed to do, but we'll deal with it later.
+```
+
+
+```{r}
+recipe_obj %>% 
+    prep() %>%
+    bake(train_data) %>%
+    select(skewed_feature_names) %>%
+    plot_hist_facet()
+```
+# 3. Center / Scaling ----
+
+How in the world am I supposed to know if I need to do Centering and Scaling preprocessing before I run my model!?!?!?!
+
+Good question. Go to page 550 (565 on the PDF) of Applied Predictive Modeling (https://vuquangnguyen2016.files.wordpress.com/2018/03/applied-predictive-modeling-max-kuhn-kjell-johnson_1518.pdf)
+
+But wait, some models require and others don't along with some needing Near Zero Variance (NZV) or highly correlated variables (Corr) removed. Could I set up separate recipes for the models that do and don't need this?
+
+Yes, now you're getting it!
+
+Also tree models are pretty robust to these kinds of things so that if you do all these steps for a linear / logistic regression, you don't need to do a separate recipe for preprocessing for your tree based models if you don't want to.
+
+
+```{r}
+# 3. Center / Scaling ----
+
+train_data %>%
+    select_if(is.numeric) %>%
+    plot_hist_facet()
+  
+```
+
+```{r}
+recipe_obj <- recipe(Attrition ~ ., data = train_data) %>%
+    update_role(ID, EmployeeNumber, new_role = "ID") %>%
+    # Apply Yeo-Johnson transformation to skewed numeric features
+    step_YeoJohnson(all_of(skewed_feature_names)) %>%
+    # Remove zero and near-zero variance features
+    step_zv(all_predictors()) %>%
+    step_nzv(all_predictors()) %>%
+    # Normalize numeric features
+    step_normalize(all_numeric(), -all_outcomes()) %>%
+    # Convert JobLevel and StockOptionLevel to factors with specific levels
+    step_mutate(JobLevel = factor(JobLevel, levels = job_levels)) %>%
+    step_mutate(StockOptionLevel = factor(StockOptionLevel, levels = stock_option_levels)) %>%
+    step_center(all_numeric()) %>% # this part is new
+    step_scale(all_numeric()) # this part is new
+```
+
+# 4. Dummy Variables (One Hot Encoding) ----
+
+Now we will do some one hot encoding.
+
+If you just ask, what is "one hot encoding" and why do we need to do it, go [here](https://machinelearningmastery.com/why-one-hot-encode-data-in-machine-learning/)
+
+```{r}
+recipe_obj %>%
+    prep() %>%
+    bake(new_data = train_data) %>%
+    select(contains("JobRole")) %>%
+    plot_hist_facet() #machine learning algo won't know how to process this. We need to make dummy variables
+```
+The machine learning algorithm won't know how to process `JobRole` in this form so we will need to dummy code it.
+
+```{r}
+# 4. Dummy Variables (One Hot Encoding) ----
+
+# Define the desired levels for each factor
+job_levels <- c("0", "1", "2", "3", "4", "5")
+stock_option_levels <- c("0", "1", "2", "3")
+
+# Create the recipe
+dummied_recipe_obj <- recipe(Attrition ~ ., data = train_data) %>%
+    update_role(ID, EmployeeNumber, new_role = "ID") %>%
+    # Apply Yeo-Johnson transformation to skewed numeric features
+    step_YeoJohnson(all_of(skewed_feature_names)) %>%
+    # Remove zero and near-zero variance features
+    step_zv(all_predictors()) %>%
+    step_nzv(all_predictors()) %>%
+    # Convert JobLevel and StockOptionLevel to factors with specific levels
+    step_mutate(JobLevel = factor(JobLevel, levels = job_levels)) %>%
+    step_mutate(StockOptionLevel = factor(StockOptionLevel, levels = stock_option_levels)) %>%
+    # Normalize numeric features
+    step_normalize(all_numeric(), -all_outcomes()) %>%
+    step_dummy(all_nominal()) #this part is new; dummy coding all nominal
+
+dummied_recipe_obj %>%
+    prep() %>%
+    bake(new_data = train_data) %>%
+    select(contains("JobRole")) %>%
+    plot_hist_facet(ncol = 3) 
+
+```
+
+Now the machine learning algorithms can handle `JobRole` after it has been dummy coded. Notice the difference. 
+
+We're almost there! Lastly, since our data is imbalanced (e.g., much more of the non-target data (stayed) than the target data (left)) we will need to correct this somehow. We will go with upsampling for now. This will resample the target data until we have the same amount (or another predesignated amount) that will help our algorithms to see what a "leaver" looks like and make better predictions around it rather than getting lazy and gravitating towards the larger group (e.g., the stayers).
+
+We will add in `step_upsample` to our recipe.
+
+We finally have our "Final" recipe after all of that preprocessing!
+
+Notice, we also swapped out `step_center` and `step_scale` for `step_normalize` to do it in one line instead of two.
+
+We'll stop here for now and not go into any feature engineering and such to save on time, but I encourage you to do so on your own.
+
+```{r}
+# Final Recipe ----
+
+set.seed(2020) #setting seed here because I think step_upsample may need it.
+
+#Possible way to fix step_num2factor
+#From: https://stackoverflow.com/questions/61564259/step-num2factor-usage-tidymodel-recipe-package
+
+# Summary of steps:
+
+# 1. Identifying ID columns first helps to prevent any unintended transformations or steps being applied to them.
+# 2. Converting variables to factors early ensures that subsequent steps treat these columns correctly.
+# 3. Applying transformations for skewness (Yeo-Johnson) before removing near-zero variance features ensures that the transformed features are considered.
+# 4. Removing near-zero variance features before normalization is essential to avoid dividing by near-zero variances.
+# 5. Normalizing numeric features before upsampling ensures that the normalization parameters are based on the original data distribution.
+# 6. Upsampling is done towards the end and is skipped for test data, as intended.
+# 7. Creating dummy variables at the end ensures that all preprocessing steps are performed on the original categorical variables.
+
+recipe_obj <- recipe(Attrition ~ ., data = train_data) %>% 
+  update_role(ID, EmployeeNumber, new_role = "ID") %>%
+  step_mutate(JobLevel = factor(JobLevel)) %>% #step_num2factor doesn't seem to like having more than one variable, especially if they have a different number of factors. It will apply the given "Levels" to all variables listed even if that makes no sense...
+    step_mutate(StockOptionLevel = factor(StockOptionLevel)) %>% #so enter step_mutate. See link above.
+    step_YeoJohnson(skewed_feature_names) %>%
+    step_nzv(all_numeric()) %>% #it looks like step_nzv also takes care of step_zv so these are probably redundant.
+    step_zv(all_predictors()) %>%
+    # Convert JobLevel and StockOptionLevel to factors with specific levels
+    step_mutate(JobLevel = factor(JobLevel, levels = job_levels)) %>%
+    step_mutate(StockOptionLevel = factor(StockOptionLevel, levels = stock_option_levels)) %>%
+    step_normalize(all_numeric()) %>%
+    step_upsample(all_outcomes(), skip = TRUE) %>% #telling it not to upsample test data when entering test flow
+    #see here (https://recipes.tidymodels.org/articles/Skipping.html) We want to upsample on training data, but not on test data
+    # step_novel(all_predictors()) %>% #creates a specification of a recipe step that will assign a previously unseen factor level to a new value. #This is throwing an error downstream. Not dealing with this right now, just commenting out.
+    step_dummy(all_nominal(), -all_outcomes()) #This only seems to work if you remove the outcome variable. In this case "Attrition"
+
+  
+  
+recipe_obj
+```
+
+And now, we will create a separate "prepped" recipe
+
+```{r}
+recipe_obj_prep <- recipe(Attrition ~ ., data = train_data) %>% 
+  update_role(ID, EmployeeNumber, new_role = "ID") %>%
+  step_mutate(JobLevel = factor(JobLevel)) %>%
+    step_mutate(StockOptionLevel = factor(StockOptionLevel)) %>%
+    step_YeoJohnson(skewed_feature_names) %>%
+    step_nzv(all_numeric()) %>%
+    step_zv(all_predictors()) %>%
+    # Convert JobLevel and StockOptionLevel to factors with specific levels
+    step_mutate(JobLevel = factor(JobLevel, levels = job_levels)) %>%
+    step_mutate(StockOptionLevel = factor(StockOptionLevel, levels = stock_option_levels)) %>%
+    step_normalize(all_numeric()) %>%
+    step_upsample(all_outcomes(), skip = FALSE) %>% #switching skip to FALSE since this won't go into a workflow and I want us to be able to see it here.
+    # step_novel(all_predictors()) %>% # creates a specification of a recipe step that will assign a previously unseen factor level to a new value. #This is throwing an error. Not dealing with this right now, just commenting out.
+    step_dummy(all_nominal(), -all_outcomes()) %>% #This worked!%>%
+    prep() #we will now "prep" it
+```
+
+Ok, did this actually behave the way we think it did?
+
+We'll go a bit old school (before workflows) and `bake` it to take a look.
+```{r}
+recipe_obj_baked <- bake(recipe_obj_prep, new_data = train_data)
+
+recipe_obj_baked
+```
+Going to just remove `ID` and `EmployeeNumber`. For some reason `tidymodels` seems to struggle with the assignment of `ID` and still applies changes to it as if it were a predictor. Let me know if you find a solution!
+
+```{r}
+set.seed(2020) #setting seed here because I think step_upsample may need it.
+
+#Possible way to fix step_num2factor
+#From: https://stackoverflow.com/questions/61564259/step-num2factor-usage-tidymodel-recipe-package
+
+recipe_obj <- recipe(Attrition ~ ., data = train_data) %>% 
+  update_role(ID, EmployeeNumber, new_role = "ID") %>%
+  step_rm(ID, EmployeeNumber) %>% # Removing them since ID isn't behaving
+  step_mutate(JobLevel = factor(JobLevel)) %>% #step_num2factor doesn't seem to like having more than one variable, especially if they have a different number of factors. It will apply the given "Levels" to all variables listed even if that makes no sense...
+    step_mutate(StockOptionLevel = factor(StockOptionLevel)) %>% #so enter step_mutate. See link above.
+    step_YeoJohnson(skewed_feature_names) %>%
+    step_nzv(all_numeric()) %>% #it looks like step_nzv also takes care of step_zv so these are probably redundant.
+    step_zv(all_predictors()) %>%
+    # Convert JobLevel and StockOptionLevel to factors with specific levels
+    step_mutate(JobLevel = factor(JobLevel, levels = job_levels)) %>%
+    step_mutate(StockOptionLevel = factor(StockOptionLevel, levels = stock_option_levels)) %>%
+    step_normalize(all_numeric()) %>%
+    step_upsample(all_outcomes(), skip = TRUE) %>% #see here (https://recipes.tidymodels.org/articles/Skipping.html) We want to upsample on training data, but not on test data
+    # step_novel(all_predictors()) %>% #creates a specification of a recipe step that will assign a previously unseen factor level to a new value. #This is throwing an error downstream. Not dealing with this right now, just commenting out.
+    step_dummy(all_nominal(), -all_outcomes()) #This only seems to work if you remove the outcome variable. In this case "Attrition"
+
+recipe_obj
+```
+
+And now, we will create a separate "prepped" recipe again after removing ID and EmployeeNumber.
+
+```{r}
+recipe_obj <- recipe(Attrition ~ ., data = train_data) %>% 
+  update_role(ID, EmployeeNumber, new_role = "ID") %>%
+  step_rm(ID, EmployeeNumber) %>% # Removing them since ID isn't behaving
+  step_mutate(JobLevel = factor(JobLevel)) %>% #step_num2factor doesn't seem to like having more than one variable, especially if they have a different number of factors. It will apply the given "Levels" to all variables listed even if that makes no sense...
+    step_mutate(StockOptionLevel = factor(StockOptionLevel)) %>% #so enter step_mutate. See link above.
+    step_YeoJohnson(skewed_feature_names) %>%
+    step_nzv(all_numeric()) %>% #it looks like step_nzv also takes care of step_zv so these are probably redundant.
+    step_zv(all_predictors()) %>%
+    # Convert JobLevel and StockOptionLevel to factors with specific levels
+    step_mutate(JobLevel = factor(JobLevel, levels = job_levels)) %>%
+    step_mutate(StockOptionLevel = factor(StockOptionLevel, levels = stock_option_levels)) %>%
+    step_normalize(all_numeric()) %>%
+    step_upsample(all_outcomes(), skip = TRUE) %>% #see here (https://recipes.tidymodels.org/articles/Skipping.html) We want to upsample on training data, but not on test data
+    # step_novel(all_predictors()) %>% #creates a specification of a recipe step that will assign a previously unseen factor level to a new value. #This is throwing an error downstream. Not dealing with this right now, just commenting out.
+    step_dummy(all_nominal(), -all_outcomes()) %>% #This only seems to work if you remove the outcome variable. In this case "Attrition"
+    prep() #we will now "prep" it
+```
+
+Ok, did this actually behave the way we think it did?
+
+We'll go a bit old school (before workflows) and `bake` it to take a look.
+```{r}
+recipe_obj_baked <- bake(recipe_obj_prep, new_data = train_data)
+
+recipe_obj_baked
+```
+
+
+What is the proportion of `Attrition`?
+
+```{r}
+tabyl(recipe_obj_baked$Attrition)
+```
+
+
+
+```{r}
+train_tbl <- bake(recipe_obj_prep, new_data = train_data)
+
+train_tbl %>% glimpse()
+
+test_tbl <- bake(recipe_obj_prep, new_data = test_data)
+
+test_tbl %>% glimpse()
+```
+
+First, we will start trying to predict attrition using a logistic regression as you are probably already familiar with this and it is highly interpretable. This can serve as a baseline and if a Decision Tree, Random Forest, Support Vector Machine, xgBoost, etc. can out perform it, great! Then you need to ask yourself, can I interpret the results of my fancy model that outperformed my logistic regression? If so, great! If not, learn why and at least you will know how much prediction power you are leaving on the table to inform a key stakeholder if asked. 
+
+
+Note: we are changing the final recipe to explicitly call out the variables in YeoJohnson as when we get down to the Random Forest model, it fails since it is looking for columns that don't exist. Let me know if you find a fix for this!
+
+Below is the way it is currently working.
+
+```{r}
+set.seed(2020) #setting seed here because I think step_upsample may need it.
+
+#Possible way to fix step_num2factor
+#From: https://stackoverflow.com/questions/61564259/step-num2factor-usage-tidymodel-recipe-package
+
+recipe_obj <- recipe(Attrition ~ ., data = train_data) %>% 
+  update_role(ID, EmployeeNumber, new_role = "ID") %>%
+  step_mutate(JobLevel = factor(JobLevel)) %>% #step_num2factor doesn't seem to like having more than one variable, especially if they have a different number of factors. It will apply the given "Levels" to all variables listed even if that makes no sense...
+    step_mutate(StockOptionLevel = factor(StockOptionLevel)) %>% #so enter step_mutate. See link above.
+    step_YeoJohnson(YearsSinceLastPromotion, #Need to break out step_YeoJohnson into each variable as opposed to a vector for some reason
+                    PerformanceRating,
+                    YearsAtCompany,
+                    MonthlyIncome,
+                    TotalWorkingYears,
+                    NumCompaniesWorked,
+                    DistanceFromHome,
+                    YearsInCurrentRole,
+                    YearsWithCurrManager,
+                    PercentSalaryHike) %>%
+    step_nzv(all_numeric()) %>% #it looks like step_nzv also takes care of step_zv so these are probably redundant.
+    step_zv(all_predictors()) %>%
+    step_mutate(JobLevel = factor(JobLevel, levels = job_levels)) %>%
+    step_mutate(StockOptionLevel = factor(StockOptionLevel, levels = stock_option_levels)) %>%
+    step_normalize(all_numeric()) %>%
+    step_upsample(all_outcomes(), skip = TRUE) %>% #see here (https://recipes.tidymodels.org/articles/Skipping.html) We want to upsample on training data, but not on test data
+    # step_novel(all_predictors()) %>% #creates a specification of a recipe step that will assign a previously unseen factor level to a new value. #This is throwing an error downstream. Not dealing with this right now, just commenting out.
+    step_dummy(all_nominal(), -all_outcomes()) #This only seems to work if you remove the outcome variable. In this case "Attrition"
+
+  
+  
+recipe_obj
+```
+
+### Create new data frame
+
+Now we will create the new df using only the features that made the cut. Since some features were removed, we will need to resplit the data (using the same seed) and create the resampling folds again as well.
+
+```{r}
+Data <- Data %>%
+    select(ID,
+           EmployeeNumber,
+           Attrition,
+           Age,
+           BusinessTravel,
+           Department,
+           EnvironmentSatisfaction,
+           JobInvolvement,
+           JobLevel,
+           JobRole,
+           JobSatisfaction,
+           MaritalStatus,
+           MonthlyIncome,
+           NumCompaniesWorked,
+           OverTime,
+           StockOptionLevel,
+           TotalWorkingYears,
+           YearsAtCompany,
+           YearsInCurrentRole,
+           YearsSinceLastPromotion,
+           YearsWithCurrManager)
+```
+
+## Splitting the data again after removing features deemed unnecessary by Boruta
+
+```{r}
+set.seed(2020)
+data_split <- initial_split(Data, prop = 0.75, strata = "Attrition")
+
+train_data <- training(data_split)
+
+test_data <- testing(data_split)
+
+tabyl(train_data$Attrition)
+
+tabyl(test_data$Attrition)
+```
+
+## Rerun the Cross Validation V-Folds creation
+
+We need to rerun this (using the same seed as before) since we removed some features from the data. Going forward, we could probably just wait to do the split until after Boruta since we don't use the folds in Boruta.
+
+```{r}
+set.seed(2020)
+cv_folds <- vfold_cv(train_data, v = 10, strata = "Attrition") #We'll need to remember this later.
+```
+
+
+# Rerun the recipe since features have been removed
+
+```{r}
+set.seed(2020) #setting seed here because I think step_upsample may need it.
+
+#Possible way to fix step_num2factor
+#From: https://stackoverflow.com/questions/61564259/step-num2factor-usage-tidymodel-recipe-package
+
+recipe_obj <- recipe(Attrition ~ ., data = train_data) %>% 
+  update_role(ID, EmployeeNumber, new_role = "ID") %>%
+  step_mutate(JobLevel = factor(JobLevel)) %>% #step_num2factor doesn't seem to like having more than one variable, especially if they have a different number of factors. It will apply the given "Levels" to all variables listed even if that makes no sense...
+    step_mutate(StockOptionLevel = factor(StockOptionLevel)) %>% #so enter step_mutate. See link above.
+    step_YeoJohnson(
+                    YearsSinceLastPromotion, #Need to break out step_YeoJohnson into each variable as opposed to a vector for some reason
+                    # PerformanceRating, # removed
+                    YearsAtCompany,
+                    MonthlyIncome,
+                    TotalWorkingYears,
+                    NumCompaniesWorked,
+                    # DistanceFromHome, # removed
+                    YearsInCurrentRole,
+                    YearsWithCurrManager
+                    # PercentSalaryHike # removed
+                    ) %>%
+    step_nzv(all_numeric()) %>% #it looks like step_nzv also takes care of step_zv so these are probably redundant.
+    step_zv(all_predictors()) %>%
+    step_normalize(all_numeric()) %>%
+    step_upsample(all_outcomes(), skip = TRUE) %>% #see here (https://recipes.tidymodels.org/articles/Skipping.html) We want to upsample on training data, but not on test data
+    # step_novel(all_predictors()) %>% #creates a specification of a recipe step that will assign a previously unseen factor level to a new value. #This is throwing an error downstream. Not dealing with this right now, just commenting out.
+    step_dummy(all_nominal(), -all_outcomes()) #This only seems to work if you remove the outcome variable. In this case "Attrition"
+  
+recipe_obj
+```
+
+# Logistic Regression
+
+Now that we have our recipe ready, we will create a model.
+
+```{r}
+logit_spec <- 
+  # specify that the model is a logistic regression
+  logistic_reg() %>%
+  # select the engine/package that underlies the model
+  set_engine("glm") %>% #generalized logistic regression
+  # choose either the continuous regression or binary classification mode
+  set_mode("classification")
+```
+
+Put it all together in a workflow.
+
+```{r}
+# set the workflow
+logit_wflow <- workflow() %>%
+    # add the recipe
+  add_recipe(recipe_obj) %>%
+    # add the model
+  add_model(logit_spec)
+```
+
+Using a single call to `fit`, you can prepare (`prep()`) your model and estimate the mode
+
+Note: If you get an error here, restart R and try again.
+
+```{r}
+logit_fit <- fit(logit_wflow, data = train_data)
+```
+
+
+```{r}
+logit_fit$fit
+```
+Can we get p-values by wrapping `logit_fit` within `tidy`?
+
+
+```{r, eval = TRUE}
+tidy(logit_fit)
+
+# Error: No tidy method for objects of class workflow
+```
+
+Let's go ahead and sort on the absolute value of statistic and have a look.
+
+```{r}
+tidy(logit_fit) %>%
+  arrange(desc(abs(statistic)))
+```
+Alright, those are our best performing terms. We'll press on using all of the predictors for now (although we should probably use some sort of regularization, Ridge, LASSO, Elasticnet). but I'll leave that up to you to try. 
+
+So, now we'll move on to using cross-validation as we continue our journey.
+
+NOTE: Look at at `fit_resamples` from [here](https://alison.rbind.io/post/2020-02-27-better-tidymodels/)
+ 
+`fit_resamples()`-Trains and tests a model with cross-validation
+
+```{r}
+set.seed(2020)
+#Fit with formula and model
+fit_resamples(
+  logit_wflow,
+  model = logit_spec,          
+  resamples = cv_folds
+)
+```
+Set up our `metric_set` from `yardstick`.
+
+```{r}
+conflicts_prefer(yardstick::accuracy)
+conflicts_prefer(yardstick::precision)
+
+class_metric <- metric_set(accuracy, #how often its right
+                           f_meas, 
+                           j_index, 
+                           kap, 
+                           precision, 
+                           sensitivity, 
+                           specificity, 
+                           roc_auc, 
+                           mcc, 
+                           pr_auc)
+```
+
+* _accuracy_ - Accuracy is the proportion of the data that are predicted correctly.
+* _f_meas_ - The measure "F" is a combination of precision and recall
+* _j_index_ - Youden's J statistic is defined as: sens() + spec() - 1 #for final proj
+* _kap_ - Kappa is a similar measure to accuracy(), but is normalized by the accuracy that would be expected by chance alone and is very useful when one or more classes have large frequency distributions.
+* _precision_ - The precision is the percentage of predicted truly relevant results of the total number of predicted relevant results and characterizes the "purity in retrieval performance"
+* _sensitivity_ - The sensitivity (sens()) is defined as the proportion of positive results out of the number of samples which were actually positive
+* _specificity_ - The specificity measures the proportion of negatives that are correctly identified as negatives.
+* _roc_auc_ - metric that computes the area under the ROC curve
+* _mcc_ - Matthews correlation coefficient
+* _pr_auc_ - metric that computes the area under the precision recall curve #for final proj
+
+
+Modify the code below to use `fit_resamples()` and `cv_folds` to cross-validate the `logit_wflow` workflow.
+
+```{r}
+set.seed(2020) #Make sure to set your seed!
+fit_resamples(logit_wflow, 
+              logit_spec, 
+              metrics = class_metric,
+              resamples = cv_folds) %>%
+  collect_metrics()
+```
+
+Accuracy of .76 and AUC of .82. Not great.
+
+## Evaluate the model on the test set
+
+```{r}
+logit_last_fit <- logit_wflow %>%
+  # fit on the training set and evaluate on the test set
+  last_fit(data_split)
+```
+
+```{r}
+logit_last_fit
+```
+
+
+This is a really nice feature of tidymodels (and is what makes it work so nicely with the tidyverse) since you can do all of your tidyverse operations to the model object. While truly taking advantage of this flexibility requires proficiency with `purrr`, if you don’t want to deal with `purrr` and list-columns, there are functions that can extract the relevant information from the fit object that remove the need for purrr as we will see below.
+
+Since we supplied the train/test object when we fit the workflow, the metrics are evaluated on the test set. Now when we use the collect_metrics() function (recall we used this when tuning our parameters), it extracts the performance of the final model (since logit_fit now consists of a single final model) applied to the test set.
+
+```{r}
+logit_test_performance <- logit_last_fit %>% collect_metrics()
+logit_test_performance
+```
+
+Overall the performance is not great, with an accuracy of 0.77 and an AUC of 0.839. I think our Accuracy would have been .839 if would have simply said everybody was going to stay.
+
+You can also extract the test set predictions themselves using the `collect_predictions()` function. Note that there are 367 rows in the predictions object below which matches the number of test set observations (just to give you some evidence that these are based on the test set rather than the training set).
+
+Generate test predictions from the test set.
+
+```{r}
+logit_test_predictions <- logit_last_fit %>% collect_predictions
+logit_test_predictions
+```
+Plot the ROC Curve
+
+```{r}
+logit_test_predictions %>%
+  roc_curve(Attrition, .pred_No) %>%
+  ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+  geom_line(size = 1.5, color = "midnightblue") +
+  geom_abline(
+    lty = 2, alpha = 0.5,
+    color = "gray50",
+    size = 1.2
+  ) 
+```
+Plot the PR Curve.
+
+Learn more about the PR Curve [here](https://machinelearningmastery.com/roc-curves-and-precision-recall-curves-for-classification-in-python/) and [here](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4349800/).
+
+Generally...
+ROC curves should be used when there are roughly equal numbers of observations for each class.
+Precision-Recall curves should be used when there is a moderate to large class imbalance.
+
+My curse:
+If I have imbalanced data, but then upsample it, should I still use PR curve instead of ROC curve?
+Stack Overflow: [Precision-Recall curve vs ROC curve : Should I still apply PR curve on already balanced information through SMOTE?](https://stackoverflow.com/questions/59149793/precision-recall-curve-vs-roc-curve-should-i-still-apply-pr-curve-on-already-b) - asked 4 years and 6 months ago...still no answer. 
+
+I'm thinking we still use the PR Curve since our TEST data remains unbalanced.
+
+What does ChatGPT 4o say?
+
+Bottom Line Up Front(BLUF): For your goal of comparing the predictive power of different balancing methods (class_weight and SMOTE), continue using PR AUC as your primary evaluation metric. It will provide the most relevant insight into how well your models are performing on the minority class, even after applying balancing techniques.
+
+ChatGPT 4o Response:
+
+When dealing with imbalanced datasets, the choice of evaluation metric is crucial to properly assess the performance of your models. Let's break down your situation step-by-step to determine the appropriate evaluation metric.
+
+1. Understanding the Evaluation Metrics:
+ROC AUC (Receiver Operating Characteristic Area Under the Curve): Measures the ability of the model to distinguish between the classes. It is less informative for imbalanced datasets because it can give an overly optimistic view of performance.
+PR AUC (Precision-Recall Area Under the Curve): More informative for imbalanced datasets as it focuses on the performance of the minority class, which is usually the class of interest.
+2. Your Models and Data Balancing Approaches:
+Baseline Model (rf1): Trained on the original imbalanced dataset.
+Balanced Random Forest (rf2): Trained with class_weight='balanced' to adjust the weights inversely proportional to the class frequencies.
+SMOTE Random Forest (rf1 on SMOTE data): Trained on the synthetically balanced dataset using SMOTE.
+3. When to Use PR AUC or ROC AUC:
+Imbalanced Datasets: PR AUC is generally preferred because it provides a better understanding of the model's performance on the minority class.
+Balanced Datasets: If the data is balanced (either through class_weight or oversampling techniques like SMOTE), the evaluation metrics' dynamics change.
+4. Analysis:
+Balanced Random Forest (rf2 with class_weight='balanced'): Although this model attempts to balance the class distribution internally during training, the dataset itself remains imbalanced. Therefore, PR AUC is still a suitable metric because the model's evaluation should focus on the minority class performance.
+SMOTE Random Forest (rf1 on SMOTE data): This model is trained on a synthetically balanced dataset. While the training data is balanced, the test data typically remains imbalanced (as you do not apply SMOTE to the test set). Therefore, PR AUC remains appropriate for evaluating the model performance on the original imbalanced test set.
+5. Conclusion:
+Even though you are balancing the data in different ways during the training phase, your test set remains imbalanced. The PR AUC metric is still relevant for evaluating the models, as it provides a more nuanced view of performance on the minority class.
+
+Summary:
+For your goal of comparing the predictive power of different balancing methods (class_weight and SMOTE), continue using PR AUC as your primary evaluation metric. It will provide the most relevant insight into how well your models are performing on the minority class, even after applying balancing techniques.
+
+Prompt:
+OK, how does Youden's J (j_index) fit into all of this?
+
+ChatGPT 4o Response:
+Youden's J vs. PR AUC for Employee Attrition Prediction:
+In your case, you're trying to predict who is most likely to leave the company through voluntary attrition, which is like guessing if an employee will stay or leave.
+
+PR AUC (Precision-Recall Area Under the Curve) focuses more on the "yes" guesses, which is important when you're interested in the minority class (people leaving, in this case).
+
+Youden's J considers both "yes" and "no" guesses equally, giving you a balanced view of overall guessing power.
+
+Since you're specifically interested in predicting the minority class (who will leave), PR AUC is generally more suitable because it focuses on the performance for the positive class, which is crucial in imbalanced datasets. It helps you understand how well your model identifies those who will leave, which is the main concern in voluntary attrition analysis.
+
+Summary:
+Use PR AUC: It will help you better assess your model's ability to predict voluntary attrition, focusing on the people most likely to leave.
+Youden's J is great for a balanced overview but might not be as informative for this specific imbalanced prediction task.
+Think of PR AUC as a tool that helps you be a detective focusing on finding those rare clues (employees likely to leave), which aligns perfectly with your goal in people analytics.
+
+So...if your company has appetite to administer an intervention to a bunch of people who were probably going to stay anyway, use PR AUC. If they want the best balance possible to be the most efficient from a budget standpoint, go with Youden's J.
+
+Steps:
+Evaluate all models using PR AUC on the original test set to ensure a fair comparison focused on the minority class performance.
+Optionally, also report ROC AUC to provide additional context, especially if communicating results to a broader audience who might be more familiar with ROC AUC.
+
+```{r}
+logit_test_predictions %>%
+  pr_curve(Attrition, .pred_No) %>%
+  ggplot(aes(x = recall, y = precision)) +
+  geom_path() + 
+  coord_equal() +
+  theme_bw()
+```
+
+Since this is just a normal data frame/tibble object, we can generate summaries and plots such as a confusion matrix.
+```{r}
+# generate a confusion matrix
+conflict_prefer("spec", "yardstick")
+
+
+logit_test_predictions %>%
+  conf_mat(truth = Attrition, estimate = .pred_class)
+
+```
+
+Ok...that is mildly useful. 
+
+Can we actually dig a little deeper through? 
+
+Ahh, yes, we just need to add `summary` after we call `conf_mat`.
+
+```{r}
+logit_test_predictions %>%
+  conf_mat(truth = Attrition, estimate = .pred_class) %>%
+  summary()
+```
+If any of the above terms from the confusion matrix aren't crystal clear, please go [here](https://www.dataschool.io/simple-guide-to-confusion-matrix-terminology/)
+
+NOTE:Some of the values below have been changing around. The most recent run looked like this. How did yours look?
+
+```{r}
+#           Truth
+# Prediction  No Yes
+#        No  242  18
+#        Yes  67  42
+```
+
+
+And there it is, `specificity` at 0.716 or 71.6%. Meaning that if we say someone is going to leave, we get it right with this model 43 times out of 60 or (43/60) = .716 or 71.6%. So while we were feeling a little down with an  `accuracy` of 77%, the thing we are actually trying to predict, Attrition, we are actually getting that prediction right ~70% of the time. Let's look at some other models and see if they do better. 
+
+But before we do that. Let's say that we do like the performance of this model. What is actually driving the performance? Which variables are important?
+
+```{r}
+logit_final_model <- fit(logit_wflow, Data)
+```
+
+```{r}
+logit_final_model
+```
+
+```{r}
+# vip(logit_last_fit)
+
+logit_obj <- extract_fit_parsnip(logit_final_model)$fit
+logit_obj
+```
+Ahh, it just gives us our Coefficients again. I was hoping for something fancier. Let's get results by coefficient. Remember these were dummy coded if they were categories. The level you don't see is the "refernce" level. For instance with BusinessTravel, we only see 
+* BusinessTravel_Travel_Rarely
+* BusinessTravel_Travel_Frequently
+
+This means that BusinessTravel_Non-Travel is the reference level. 
+
+This is important when it comes to odds ratios, which we will quickly go over next.
+```{r}
+summary(logit_obj)
+```
+### Odds Ratios
+
+The odds ratio is a measure of association between a predictor variable and the binary outcome variable (turnover in this case). It tells us how much more likely an event is to occur given the presence of a predictor variable compared to the absence of the predictor variable.
+
+For example, let's say we have a logistic regression model that includes age, job satisfaction, and gender as predictor variables, and turnover as the outcome variable. We find that the odds ratio (exponentiating the coefficent) for age is 1.5, for job satisfaction it's 0.7, and for gender it's 1.2.
+
+This means that for every one year increase in age, the odds of an employee leaving the organization increase by a factor of 1.5 (assuming all other variables remain constant) or 50% ((1.5-1.0) * 100) . A job satisfaction score that's one unit higher than another employee is associated with 0.7 times the odds of leaving the organization. So, percentage change = (1 - 0.7) x 100 = 0.3 x 100 = 30%. And being male, compared to being female, is associated with 1.2 times the odds of leaving the organization.
+
+Going back to job satisfaction, this means that the odds of the outcome (such as employee turnover) are 30% lower in the group with the higher level of the predictor variable (such as high job satisfaction) compared to the group with the lower level of the predictor variable (such as low job satisfaction).
+
+In practical terms, the odds ratio tells us how much each predictor variable is associated with the outcome variable of turnover, and allows us to compare the strength of that association across different predictor variables.
+
+Understanding the odds ratio in this context can help organizations identify which factors are most strongly associated with turnover, and use that information to develop strategies to retain valuable employees and reduce turnover rates.
+
+```{r}
+# From: https://medium.com/the-researchers-guide/modelling-binary-logistic-regression-using-tidymodels-library-in-r-part-1-c1bdce0ac055
+logit_obj %>%
+    tidy(exponentiate = TRUE) %>%
+    filter(p.value < 0.05) %>%
+    arrange(desc(estimate))
+```
+
+Let's see if a Random Forest, which remember is like a collection of Decision Trees, can out perform our Logistic Regression. 
+
+# Random Forest
+
+`mtry`: The number of predictors that will be randomly sampled at each split when creating the tree models.
+
+`trees`: The number of trees contained in the ensemble.
+
+`min_n`: The minimum number of data points in a node that are required for the node to be split further.
+
+```{r}
+library(lubridate)
+
+start_time <- now() #taking system time as soon as code is run
+
+rf_spec <- rand_forest(
+  mtry = tune(), #we don't know what to put here yet, so we use `tune` as a filler
+  trees = 100, #1000 #going low here for times sake. You usually want to start with at least 1000
+  min_n = tune() #we don't know what to put here yet, so we use `tune` as a filler
+) %>%
+  set_mode("classification") %>%
+  set_engine("ranger", seed = 2023) # setting a seed within ranger. NOTE: THIS WAS A GHOST IN THE MACHINE FOR QUITE A WHILE UNTIL I FIGURED OUT THAT THE SEED NEEDED TO BE SET WITHIN THE ENGINE!!!
+
+end_time <- now() #taking system time as soon as above is done
+end_time - start_time
+
+# Time difference of 0.4355741 secs
+```
+
+Finally, let’s put these together in a `workflow()` (remember these from last class?), which is a convenience container object for carrying around bits of models.
+
+```{r}
+rf_tune_wf <- workflow() %>%
+  add_recipe(recipe_obj) %>% #remember or recipe_obj from the long long ago? We can use it here again!
+  add_model(rf_spec)
+```
+
+# Train hyperparameters
+
+Now it’s time to tune the hyperparameters for a random forest model. First, let’s create a set of cross-validation resamples to use for tuning.
+
+Wait, remember, we already did this above with `cv_folds`? We will use the same cv_folds throughout to keep it apples to apples between models.
+```{r}
+cv_folds # using this again. Detecting a theme?
+```
+
+We can’t learn the right values when training a single model, but we can train a whole bunch of models and see which ones turn out best. We can use parallel processing to make this go faster, since the different parts of the grid are independent. Let’s use grid = 20 to choose 20 grid points automatically.
+
+```{r}
+start_time <- now()
+
+conflict_prefer("tune", "tune")
+
+doParallel::registerDoParallel()
+
+set.seed(345)
+rf_tune_res <- tune_grid(
+  rf_tune_wf,
+  resamples = cv_folds,
+  grid = 20, #telling mtry to try with 20 values, same with min_n
+  metrics = class_metric
+)
+
+end_time <- now()
+
+print(difftime(end_time, start_time)) #How long it took this chunk to run
+
+# Time difference of 1.352527 mins
+
+rf_tune_res
+```
+
+How did this turn out? Let's look at AUC. Remember our Logistic Regression AUC was .819.
+
+```{r, fig.width=8, fig.height=3.5}
+rf_tune_res %>%
+    collect_metrics() %>%
+    filter(.metric == "roc_auc") %>%
+    select(mean, min_n, mtry) %>%
+    pivot_longer(min_n:mtry,
+                 values_to = "value",
+                 names_to = "parameter") %>%
+    ggplot(aes(value, mean, color = parameter)) +
+    geom_point(show.legend = FALSE) +
+    facet_wrap(~ parameter, scales = "free_x") +
+    labs(x = NULL, y = "AUC")
+```
+
+```{r, fig.width=8, fig.height=3.5}
+rf_tune_res %>%
+    collect_metrics() %>%
+    filter(.metric == "pr_auc") %>%
+    select(mean, min_n, mtry) %>%
+    pivot_longer(min_n:mtry,
+                 values_to = "value",
+                 names_to = "parameter") %>%
+    ggplot(aes(value, mean, color = parameter)) +
+    geom_point(show.legend = FALSE) +
+    facet_wrap(~ parameter, scales = "free_x") +
+    labs(x = NULL, y = "AUC")
+```
+
+This grid did not involve every combination of `min_n` and `mtry` but we can get an idea of what is going on. It looks like lower values of `mtry` are good (15 or below) and lower values of `min_n` are good (below about 20). We can get a better handle on the hyperparameters by tuning one more time, this time using `regular_grid()`. Let's set ranges of hyperparameters we want to try, based on the results from our initial tune.
+
+
+```{r}
+rf_grid <- grid_regular(
+    mtry(range = c(5, 30)), #`mtry`: The number of predictors that will be randomly sampled at each split when creating the tree models.
+    min_n(range = c(5, 25)), #`min_n`: The minimum number of data points in a node that are required for the node to be split further.
+    levels = 10 #5, #10 #mess around with this number to see how big your grid will be. You usually want to keep it <100 for computation time reasons
+)
+
+rf_grid
+```
+
+We can tune one more time, but this time in a more targeted way with this `rf_grid`.
+
+Note: This took almost 4 minutes to run so let's do a 5 minute break now.
+```{r}
+set.seed(456)
+
+start_time <- now()
+
+regular_res <- tune_grid(
+    rf_tune_wf,
+    resamples = cv_folds,
+    metrics = class_metric,
+    grid = rf_grid #notice the more targeted rf_grid object we created above as opposed to just a number like 20 that we tried the first time
+)
+
+end_time <- now()
+
+print(difftime(end_time, start_time)) #How long it took this chunk to run
+
+regular_res
+
+# Time difference of 7.088194 mins
+```
+
+What the results look like _now_?
+
+```{r}
+regular_res %>%
+    collect_metrics() %>%
+    filter(.metric == "pr_auc") %>% #can we chose specificity here to maximize that?
+    mutate(min_n = factor(min_n)) %>%
+    ggplot(aes(mtry, mean, color = min_n)) +
+    geom_line(alpha = 0.5, size = 1.5) +
+    geom_point() +
+    labs(y = "AUC")
+```
+
+NOTE: The results keep changing so I may need to set another seed somewhere. In the latest iteration min_n = 5 and mtry = 27. Let me know what you get.
+
+Who can tell me which model performed the best?
+
+I'm seeing min_n = 5 and mtry = 27 with the highest AUC. How about you?
+
+## Choosing the best model
+
+It's much more clear what the best model is now. We can identify it using the function `select_best()`, and then update our original model specification `tune_spec` to create our final model specification. It is unclear if we could swap out "roc_auc" for specificity or some other metric. Please let me know if you come across a way to do this!
+
+```{r}
+best_auc <- select_best(regular_res, metric = "pr_auc")
+
+final_rf <- finalize_model(
+    rf_spec,
+    best_auc
+)
+
+final_rf
+```
+
+Let's explore our final model a bit. What can we learn about variable importance, using the [vip](https://koalaverse.github.io/vip/) package?
+
+```{r}
+library(vip)
+
+final_rf %>%
+    set_engine("ranger", importance = "permutation") %>%
+    parsnip::fit(Attrition ~ .,
+        data = juice(recipe_obj_prep)) %>%
+    vip(geom = "point")
+
+
+```
+
+Looks like OverTime_Yes, Age (careful with this one...), TotalWorkingYears, MontlyIncome, and YearsAtCompany are the most important variables.
+
+Let's make a final workflow, and then fit one last time, using the convenience function [`last_fit()`](https://tidymodels.github.io/tune/reference/last_fit.html). This function fits a final model on the entire training set and evaluates on the testing set. We just need to give this function our original train/test split.
+
+```{r}
+
+rf_final_wf <- workflow() %>%
+    add_recipe(recipe_obj) %>%
+    add_model(final_rf)
+
+rf_final_res <- rf_final_wf %>%
+    last_fit(data_split,
+             metrics = class_metric)
+
+rf_final_res %>%
+    collect_metrics()
+```
+
+We now have an Accuracy of 0.829 compared to .769 for our logistic regression and AUC of .776 compared to .819 for our logistic regression.
+
+Let's take a look at the confusion matrix.
+
+Remember from before, you can also extract the test set predictions themselves using the `collect_predictions()` function. Note that there are 367 rows in the predictions object below which matches the number of test set observations (just to give you some evidence that these are based on the test set rather than the training set).
+
+Generate test predictions from the test set.
+
+```{r}
+rf_test_predictions <- rf_final_res %>% collect_predictions()
+rf_test_predictions
+```
+
+Plot the ROC Curve
+
+```{r}
+rf_test_predictions %>%
+  roc_curve(Attrition, .pred_No) %>%
+  ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+  geom_line(size = 1.5, color = "midnightblue") +
+  geom_abline(
+    lty = 2, alpha = 0.5,
+    color = "gray50",
+    size = 1.2
+  ) 
+```
+Plot the PR Curve.
+
+
+```{r}
+rf_test_predictions %>%
+  pr_curve(Attrition, .pred_No) %>%
+  ggplot(aes(x = recall, y = precision)) +
+  geom_path() + 
+  coord_equal() +
+  theme_bw()
+```
+
+Since this is just a normal data frame/tibble object, we can generate summaries and plots such as a confusion matrix just like we did for our logistic regression.
+```{r}
+# generate a confusion matrix
+conflict_prefer("spec", "yardstick")
+
+
+rf_test_predictions %>%
+  conf_mat(truth = Attrition, estimate = .pred_class)
+
+```
+
+```{r}
+#           Truth
+# Prediction  No Yes
+#        No  283  37
+#        Yes  26  23
+```
+
+
+Ok...that is mildly useful, again. 
+
+What did the confusion matrix of our logistic regression look like again? Remember, we are most concerned with predicting those with Attrition = Yes. Hmm, we're now getting 23 out of 60 right as opposed to 43 out of 60. Which model would you use?
+
+```{r}
+#                   Truth
+# Prediction       No Yes
+#             No  247  17
+#             Yes  62  43
+```
+
+
+Again, we'll dig a little deeper by adding `summary` after we call `conf_mat`.
+
+```{r}
+rf_test_predictions %>%
+  conf_mat(truth = Attrition, estimate = .pred_class) %>%
+  summary()
+```
+
+Notice now, `specificity` has shrunk to 0.416 from 0.796 of the logistic regression model. Meaning that if we say someone is going to leave, we get it right with this model 25 times out of 60 or (25/60) = .417 or 41.7%. So while the `accuracy` looks better than our previous model at 88% vs 70%, the thing we are actually trying to predict, Attrition, we are actually getting that prediction right around 42% of the time.
+
+One thing we didn't do was look at correlations between our predictors...so we may have some collinearity going on. We could have fixed this (sort of) with step_corr(), but it will just randomly kick out one of the offending variables with no thought about theory. So...this is why it is so important to get to know your data before modeling. I would manually look at correlations between variables and then choose which to keep before sending the data on to the `recipe`. It is up to you to decide which portions of the preprocessing to handle on your own and which to trust `recipes` with. Centering and scaling? Sure, no problem. All strings to factors? Absolutely! Pick which highly correlated variables stay and which ones go? Uhh, no, I'll handle that one on my own.
+
+```{r}
+library(corrr)
+Data_corr <- Data %>%
+    as_tibble() %>%
+    select(-c(EmployeeNumber,
+              ID)) %>%
+    select_if(is.numeric) %>%
+    corrr::correlate() %>%
+    stretch() %>%
+    fashion()
+
+Data_corr
+```
+
+
+
+Now that we have gone through all of this, I will throw open the gates to AutoML using [H2O.ai](https://www.h2o.ai/) and [LIME](https://www.kdd.org/kdd2016/papers/files/rfp0573-ribeiroA.pdf).
+
+[Here](https://uc-r.github.io/lime) is another walkthrough of the IBM HR data using both H2O.ai and LIME, so I encourage you to work through it as well. 
+
+BE CAREFUL!!!!! Remember, the computer will give you something. It is up to you to know exactly what that "something" is. If your data is biased, your model will be biased. If your model is totally black box and you can't explain the action items that need to come from it (e.g. which lever to pull, how much change to expect) then you may want to go with the simplest, easiest to explain, best performing model and work your way up.
+
+# Just the code
+
+```{r ref.label = knitr::all_labels(), echo = TRUE, eval = FALSE}
+
+```

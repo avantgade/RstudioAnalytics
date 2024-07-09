@@ -1,0 +1,367 @@
+---
+title: "ISLR Tidymodels Labs - 8 - Tree-Based Methods"
+output: html_document
+---
+
+# Tree-Based Methods
+
+This lab will take a look at different tree-based models, in doing so we will explore how changing the hyperparameters can help improve performance. 
+This chapter will use [parsnip](https://www.tidymodels.org/start/models/) for model fitting and [recipes and workflows](https://www.tidymodels.org/start/recipes/) to perform the transformations, and [tune and dials](https://www.tidymodels.org/start/tuning/) to tune the hyperparameters of the model. `rpart.plot` is used to visualize the decision trees created using the `rpart` package as engine, and `vip` is used to visualize variable importance for later models.
+
+```{r, message=FALSE}
+library(tidymodels)
+library(ISLR)
+library(rpart.plot)
+library(vip)
+data("Boston", package = "MASS") 
+Boston <- as_tibble(Boston) #utilizing same boston dataset as before
+```
+
+The `Boston` data set contain various statistics for 506 neighborhoods in Boston. We will build a regression model that related the median value of owner-occupied homes (`medv`) as the response with the remaining variables as predictors. 
+
+```{block, type='infobox'}
+The `Boston` data set is quite outdated and contains some really unfortunate variables.
+```
+
+We will also use the `Carseats` data set from the `ISLR` package to demonstrate a classification model. We create a new variable `High` to denote if `Sales <= 8`, then the `Sales` predictor is removed as it is a perfect predictor of `High`.
+
+```{r}
+Carseats <- as_tibble(Carseats) %>%
+  mutate(High = factor(if_else(Sales <= 8, "No", "Yes"))) %>%
+  dplyr::select(-Sales) #may want to use conflicted package here
+```
+
+## Fitting Classification Trees
+
+We will both be fitting a classification and regression tree in this section, so we can save a little bit of typing by creating a general decision tree specification using `rpart` as the engine.
+
+```{r}
+tree_spec <- decision_tree() %>%
+  set_engine("rpart") #setting rpart as engine
+```
+
+Then this decision tree specification can be used to create a classification decision tree engine. This is a good example of how the flexible composition system created by parsnip can be used to create multiple model specifications.
+
+```{r}
+class_tree_spec <- tree_spec %>%
+  set_mode("classification") #classifying treespec function as classification and then creating new function
+```
+
+With both a model specification and our data are we ready to fit the model.
+
+```{r}
+class_tree_fit <- class_tree_spec %>%
+  fit(High ~ ., data = Carseats) #fitting using all variables, using carseat dataset
+```
+
+When we look at the model output we see a quite informative summary of the model. It tries to give a written description of the tree that is created.
+
+```{r}
+class_tree_fit
+```
+
+The `summary()` method provides even more information that can be useful.
+
+```{r}
+summary(class_tree_fit$fit) # WHY IS THIS OUTPUT SO LONG
+```
+
+
+Once the tree gets more than a couple of nodes it can become hard to read the printed diagram. The `rpart.plot` package provides functions to let us easily visualize the decision tree. As the name implies, it only works with `rpart` trees.
+
+```{r, warning=FALSE}
+rpart.plot(class_tree_fit$fit)
+```
+
+We can see that the most important variable to predict high sales appears to be shelving location as it forms the first node.
+
+The training accuracy of this model is `r augment(class_tree_fit, new_data = Carseats) %>% accuracy(truth = High, estimate = .pred_class) %>% pull(.estimate) %>% scales::percent_format()(.)`
+
+```{r}
+augment(class_tree_fit, new_data = Carseats) %>% #checking accuracy of model using whole dataset
+  accuracy(truth = High, estimate = .pred_class)
+```
+
+Let us take a look at the confusion matrix to see if the balance is there
+
+```{r}
+augment(class_tree_fit, new_data = Carseats) %>%
+  conf_mat(truth = High, estimate = .pred_class) #comparing predictions based on comparing whole data set
+```
+
+And the model appears to work well overall. But this model was fit on the whole data set so we only get the training accuracy which could be misleading if the model is overfitting. Let us redo the fitting by creating a validation split and fit the model on the training data set.
+
+```{r}
+set.seed(1234) #setting random seed
+Carseats_split <- initial_split(Carseats) #creating data splits
+Carseats_train <- training(Carseats_split)
+Carseats_test <- testing(Carseats_split)
+```
+
+Now we can fit the model on the training data set.
+
+```{r}
+class_tree_fit <- fit(class_tree_spec, High ~ ., data = Carseats_train)
+```
+
+Let us take a look at the confusion matrix for the training data set and testing data set.
+
+```{r}
+augment(class_tree_fit, new_data = Carseats_train) %>%
+  conf_mat(truth = High, estimate = .pred_class) #checking with training dataset
+```
+
+The training data set performs well as we would expect
+
+```{r}
+augment(class_tree_fit, new_data = Carseats_test) %>%
+  conf_mat(truth = High, estimate = .pred_class) #checking with testing dataset
+```
+
+but the testing data set doesn't perform just as well and get a smaller accuracy of `r augment(class_tree_fit, new_data = Carseats_test) %>% accuracy(truth = High, estimate = .pred_class) %>% pull(.estimate) %>% scales::percent_format()(.)`
+
+```{r}
+augment(class_tree_fit, new_data = Carseats_test) %>%
+  accuracy(truth = High, estimate = .pred_class) #accuracy of test set
+```
+
+Let us try to tune the `cost_complexity` of the decision tree to find a more optimal complexity. We use the `class_tree_spec` object and use the `set_args()` function to specify that we want to tune `cost_complexity`. This is then passed directly into the workflow object to avoid creating an intermediate object.
+
+```{r}
+class_tree_wf <- workflow() %>%
+  add_model(class_tree_spec %>% set_args(cost_complexity = tune())) %>% #turning complexity
+  add_formula(High ~ .)
+```
+
+To be able to tune the variable we need 2 more objects. S `resamples` object, we will use a k-fold cross-validation data set, and a `grid` of values to try. Since we are only tuning 1 hyperparameter it is fine to stay with a regular grid.
+
+```{r}
+set.seed(1234)
+Carseats_fold <- vfold_cv(Carseats_train)
+param_grid <- grid_regular(cost_complexity(range = c(-3, -1)), levels = 10)
+tune_res <- tune_grid(
+  class_tree_wf, 
+  resamples = Carseats_fold, 
+  grid = param_grid, 
+  metrics = metric_set(accuracy)
+)
+```
+
+using `autoplot()` shows which values of `cost_complexity` appear to produce the highest accuracy
+
+```{r}
+autoplot(tune_res)
+```
+
+We can now select the best performing value with `select_best()`, finalize the workflow by updating the value of `cost_complexity` and fit the model on the full training data set.
+
+```{r, warning=FALSE}
+best_complexity <- select_best(tune_res)
+best_complexity
+```
+
+```{r}
+class_tree_final <- finalize_workflow(class_tree_wf, best_complexity)
+class_tree_final_fit <- fit(class_tree_final, data = Carseats_train)
+class_tree_final_fit
+```
+
+
+At last, we can visualize the model, and we see that the better-performing model is less complex than the original model we fit. 
+
+```{r, warning=FALSE}
+rpart.plot(class_tree_final_fit$fit$fit$fit) #more parsimonious model
+```
+
+## Fitting Regression Trees
+
+We will now show how we fit a regression tree. This is very similar to what we saw in the last section. The main difference here is that the response we are looking at will be continuous instead of categorical. We can reuse `tree_spec` as a base for the regression decision tree specification.
+
+```{r}
+reg_tree_spec <- tree_spec %>%
+  set_mode("regression")
+```
+
+We are using the `Boston` data set here so we will do a validation split here.
+
+```{r, warning=FALSE}
+set.seed(1234)
+Boston_split <- initial_split(Boston)
+Boston_train <- training(Boston_split)
+Boston_test <- testing(Boston_split)
+```
+
+fitting the model to the training data set
+
+```{r, warning=FALSE}
+reg_tree_fit <- fit(reg_tree_spec, medv ~ ., Boston_train)
+reg_tree_fit
+```
+
+```{r}
+augment(reg_tree_fit, new_data = Boston_test) %>%
+  rmse(truth = medv, estimate = .pred)
+```
+
+and the `rpart.plot()` function works for the regression decision tree as well
+
+```{r, warning=FALSE}
+rpart.plot(reg_tree_fit$fit) #based off different type of variable
+```
+
+Notice how the result is a numeric variable instead of a class.
+
+Now let us again try to tune the `cost_complexity` to find the best performing model.
+
+```{r}
+reg_tree_wf <- workflow() %>%
+  add_model(reg_tree_spec %>% set_args(cost_complexity = tune())) %>%
+  add_formula(medv ~ .)
+set.seed(1234)
+Boston_fold <- vfold_cv(Boston_train)
+param_grid <- grid_regular(cost_complexity(range = c(-4, -1)), levels = 10) #more concise version of above tuning.
+tune_res <- tune_grid(
+  reg_tree_wf, 
+  resamples = Boston_fold, 
+  grid = param_grid
+)
+```
+
+And it appears that higher complexity works are to be preferred according to our cross-validation
+
+```{r}
+autoplot(tune_res)
+```
+
+We select the best-performing model according to `"rmse"` and fit the final model on the whole training data set.
+
+```{r, warning=FALSE}
+best_complexity <- select_best(tune_res, metric = "rmse")
+best_complexity
+```
+
+```{r}
+reg_tree_final <- finalize_workflow(reg_tree_wf, best_complexity)
+reg_tree_final_fit <- fit(reg_tree_final, data = Boston_train)
+reg_tree_final_fit
+```
+
+
+Visualizing the model reveals a much more complex tree than what we saw in the last section.
+
+```{r, warning=FALSE}
+rpart.plot(reg_tree_final_fit$fit$fit$fit) #less parsimony, but better fit
+```
+
+## Bagging and Random Forests
+
+Here we apply bagging and random forests to the `Boston` data set. We will be using the `randomForest` package as the engine. A bagging model is the same as a random forest where `mtry` is equal to the number of predictors. We can specify the `mtry` to be `.cols()` which means that the number of columns in the predictor matrix is used. This is useful if you want to make the specification more general and useable to many different data sets. `.cols()` is one of many [descriptors](https://parsnip.tidymodels.org/reference/descriptors.html) in the parsnip package.
+We also set `importance = TRUE` in `set_engine()` to tell the engine to save the information regarding variable importance. This is needed for this engine if we want to use the `vip` package later.
+
+```{r}
+bagging_spec <- rand_forest(mtry = .cols()) %>%
+  set_engine("randomForest", importance = TRUE) %>%
+  set_mode("regression")
+```
+
+We fit the model like normal
+
+```{r}
+bagging_fit <- fit(bagging_spec, medv ~ ., data = Boston_train)
+```
+
+and we take a look at the testing performance. Which we see is an improvement over the decision tree.
+
+```{r}
+augment(bagging_fit, new_data = Boston_test) %>%
+  rmse(truth = medv, estimate = .pred) #stronger RMSE
+```
+
+We can also create a quick scatterplot between the true and predicted value to see if we can make any diagnostics.
+
+```{r}
+augment(bagging_fit, new_data = Boston_test) %>%
+  ggplot(aes(medv, .pred)) +
+  geom_abline() +
+  geom_point(alpha = 0.5)
+```
+
+There isn't anything weird going on here so we are happy. Next, let us take a look at the variable importance
+
+```{r}
+vip(bagging_fit)
+```
+
+Next, let us take a look at a random forest. By default, `randomForest()` `p / 3` variables when building a random forest of regression trees, and `sqrt(p)` variables when building a random forest of classification trees. Here we use `mtry = 6`.
+
+```{r}
+rf_spec <- rand_forest(mtry = 6) %>%
+  set_engine("randomForest", importance = TRUE) %>% #normally would be doing hyperparametric tuning
+  set_mode("regression")
+```
+
+and fitting the model like normal
+
+```{r}
+rf_fit <- fit(rf_spec, medv ~ ., data = Boston_train)
+```
+
+this model has a slightly better performance than the bagging model
+
+```{r}
+augment(rf_fit, new_data = Boston_test) %>%
+  rmse(truth = medv, estimate = .pred)
+```
+
+We can likewise plot the true value against the predicted value
+
+```{r}
+augment(rf_fit, new_data = Boston_test) %>%
+  ggplot(aes(medv, .pred)) +
+  geom_abline() +
+  geom_point(alpha = 0.5)
+```
+
+it looks fine. No discernable difference between this chart and the one we created for the bagging model. 
+
+The variable importance plot is also quite similar to what we saw for the bagging model which isn't surprising. 
+
+```{r}
+vip(rf_fit)
+```
+
+#you would normally want to perform hyperparameter tuning for the random forest model to get the best out of your forest. This exercise is left for the reader. NOTE TO SELF
+
+## Boosting
+
+We will now fit a boosted tree model. The `xgboost` packages give a good implementation of boosted trees. It has many parameters to tune and we know that setting `trees` too high can lead to overfitting. Nevertheless, let us try fitting a boosted tree. We set `tree = 5000` to grow 5000 trees with a maximal depth of 4 by setting `tree_depth = 4`.
+
+```{r}
+boost_spec <- boost_tree(trees = 5000, tree_depth = 4) %>% 
+  set_engine("xgboost") %>%
+  set_mode("regression")
+```
+
+fitting the model like normal
+
+```{r}
+boost_fit <- fit(boost_spec, medv ~ ., data = Boston_train) #using predetermined tree parameters
+```
+
+and the `rmse` is a little high in this case which is properly because we didn't tune any of the parameters.
+
+```{r}
+augment(boost_fit, new_data = Boston_test) %>%
+  rmse(truth = medv, estimate = .pred)
+```
+
+We can look at the scatterplot and we don't see anything weird going on.
+
+```{r}
+augment(boost_fit, new_data = Boston_test) %>%
+  ggplot(aes(medv, .pred)) +
+  geom_abline() +
+  geom_point(alpha = 0.5)
+```
+
+You would normally want to perform hyperparameter tuning for the boosted tree model to get the best out of your model. This exercise is left for the reader. Look at the [Iterative search](https://www.tmwr.org/iterative-search.html) chapter of [Tidy Modeling with R](https://www.tmwr.org/) for inspiration.

@@ -1,0 +1,1175 @@
+---
+title: "R Notebook-Class 1"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+##Yaml(?) file
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r plot}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+# Automatically setting the seed across the notebook
+#PG Allows us to have consistent random seed for every sample i.e. every time a pulse survey is run.
+```{r, set.seed(2019)}
+knitr::opts_chunk$set(cache.extra = knitr::rand_seed)
+```
+
+# Automatically loading all necessary libraries
+
+This chunk is to run `pacman`. This will use a tryCatch to see if it is already loaded on your machine and if not, it will download it for you.
+
+Below that you can see with the p_load function, I've put the packages we will need. If `pacman` already finds them on your machine, nothing happens, but if it doesn't it will download the for you.
+
+```{r}
+#' <!-- ####################################################################################################### -->
+#' <!-- ####################################################################################################### -->
+#' <!-- ##################################LOADING PACKAGES##################################################### -->
+
+tryCatch(require(pacman),finally=utils:::install.packages(pkgs='pacman',repos='http://cran.r-project.org'));
+require(pacman)
+
+#' <!-- ##if the above doesn't work, use this code## -->
+#' <!-- ##tryCatch -->
+#' <!-- #detach("package:pacman", unload = TRUE) -->
+#' <!-- #install.packages("pacman", dependencies = TRUE) -->
+#' <!-- # ## install.packages("pacman") -->
+
+pacman::p_load(Hmisc,
+               checkmate,
+               corrr,
+               conflicted,
+               readxl,
+               dplyr,
+               tidyr,
+               ggplot2,
+               knitr,
+               evaluate,
+               iopsych,
+               psych,
+               quantreg,
+               lavaan,
+               xtable,
+               reshape2,
+               GPArotation,
+               Amelia,
+               # esquisse,
+               expss,
+               multilevel,
+               janitor,
+               mice,
+               lmtest,
+               naniar,
+               tidylog
+)
+
+#' <!-- #Loading from GitHub -->
+#' <!-- #pacman::p_load_current_gh("trinker/lexicon", "trinker/sentimentr") -->
+```
+
+
+This is our library chunk. If you already know you've got the necessary packages on your machine or if you've run the script before, you can skip the `pacman` chunk.
+
+```{r, echo = FALSE, include= FALSE, warning = FALSE, message = FALSE}
+
+#' <!-- #Loading libraries -->
+
+suppressPackageStartupMessages({
+    library(Hmisc) # Contains many functions useful for data analysis
+    library(checkmate) # Fast and Versatile Argument Checks
+    library(corrr) # Correlations in R
+    library(conflicted) # Makes it easier to handle same named functions that are in different packages
+    library(readxl) # reading in Excel files
+    library(dplyr) # data manipulation
+    library(tidyr) # Tidy Messy Data and pivot_longer and pivot_wider
+    library(ggplot2) # data visualization
+    library(knitr) # knitting data into HTML, Word, or PDF
+    library(evaluate) # Parsing and Evaluation Tools that Provide More Details than the Default
+    library(iopsych) # Methods for Industrial/Organizational Psychology
+    library(psych) # Procedures for Psychological, Psychometric, and Personality Research
+    library(quantreg) # Quantile Regression
+    library(lavaan) # confirmatory factor analysis (CFA) and structural equation modeling (SEM)
+    library(xtable) # Export Tables to LaTeX or HTML
+    library(reshape2) # transforming data between wide and long (tall)
+    library(GPArotation) # GPA Factor Rotation
+    library(Amelia) # A Program for Missing Data
+    # library(esquisse) # Explore and Visualize Your Data Interactively
+    library(expss) # Tables, Labels and Some Useful Functions from Spreadsheets and 'SPSS' Statistics
+    library(multilevel) # Multilevel Functions
+    library(janitor) # 	Simple Tools for Examining and Cleaning Dirty Data
+    library(mice) # Multivariate Imputation by Chained Equations
+    library(skimr) # Exploratory Data Analysis
+    library(lmtest) # A collection of tests, data sets, and examples for diagnostic checking in linear regression models
+    library(naniar) # helps with missing data
+    library(tidylog) # Creates a log to tell you what your tidyverse commands are doing to the data. NOTE: MAKE SURE TO ALWAYS LOAD LAST!!!
+})
+
+for (f in getNamespaceExports("tidylog")) {
+    conflicted::conflict_prefer(f, "tidylog", quiet = TRUE)
+}
+
+```
+
+# Loading Data
+
+Now we're going to load the data and take a look at it.
+
+```{r}
+#' <!-- ####################################################################################################### -->
+#' <!-- ####################################################################################################### -->
+#' <!-- ##################################LOADING DATA######################################################### -->
+library(psych)
+
+#' Using the preexisting data set in the `psych` package BFI is the original identifier for the data set, we change it to data to make it easier to identify and keep consistent when you use multiple datasets in the same code.
+Data <- bfi
+
+str(Data)
+```
+Glimpse the data.
+
+```{r}
+glimpse(Data) #from `dplyr`
+```
+
+Get column names.
+
+```{r}
+colnames(Data)
+```
+
+Get column names wrapped in the combine function, `c()`.
+
+```{r}
+dput(colnames(Data))
+```
+
+Get column names vertical and with a comma.
+```{r}
+cat(colnames(Data), sep = ",\n")
+```
+#nice because it's robust and presents all the column names. Can comment out individual columns through this.
+
+
+```{r}
+#Export BFI data to Excel to then import back in.
+BFI <- Data
+
+#Export to Excel
+openxlsx::write.xlsx(BFI, "C:/Advanced Analytics Project/00_Data/BFI.xlsx") # Change this to the directory where you want to write the file to. MAKE SURE YOU ADJUST FOR THE SLASHES, OPPOSITE DIRECTION FROM WHAT YOU PULL IN FILE MANAGER. /BFI = File name. Everything before is the file path.
+
+```
+
+```{r}
+#Now let's remove BFI from the Global Environment
+
+rm(BFI)
+```
+
+
+```{r}
+#Read the data back in 
+library(readxl)
+BFI <- read_excel("C:/Advanced Analytics Project/00_Data/BFI.xlsx") # Change this to the directory where you want to read the file from
+
+```
+
+```{r}
+#And we'll remove it again since we already have it as Data
+rm(BFI)
+```
+
+
+# Exploratory Data Analysis (EDA)
+
+## Missing Data
+
+Now we're going to look for missing data using the `Amelia` package.
+
+```{r}
+#' Looking for missing data
+library(Amelia)
+
+missmap(Data)
+
+```
+
+You can see we've got some missing data in white. Let's clean up the look a bit so it is easier to see.
+
+```{r}
+#' Let's clean up the look
+missmap(Data, y.at=c(1), y.labels=c(''), col=c('yellow', 'black'))
+```
+
+That is better. Let's also take a look with a custom function `percentmissing`.
+
+```{r}
+percentmissing = function (x){ sum(is.na(x))/length(x) * 100}
+
+missing <- apply(Data, 1, percentmissing) # we will use an apply function to loop it. 1 indicates rows and 2 indicates columns
+
+table(round(missing, 1))
+```
+# 2236 rows have 0 percent missing, 482 are missing 3.6% etc etc.
+
+The top number you see is the % missing so 0% are missing from 2236 people, 3.57% are missing from 482 people and so on.
+
+Let's exclude anybody missing more that 5% of the data
+```{r}
+replace_people <- subset(Data, missing <= 5)
+```
+
+Now we'll check the columns.
+```{r}
+apply(replace_people, 2, percentmissing) #notice the 2 for column!
+```
+
+```{r}
+library(naniar)
+Data %>%
+    gg_miss_var()
+```
+# Gives a nice easy way to see which items are missing the most answers
+
+```{r}
+Data %>%
+    gg_miss_upset()
+```
+
+#shows us trends between what is missing together, can find patterns to what's missing. X axis has the amount of people missing things.
+
+## Imputing Data
+
+Now we will replace data by imputing with the `mice` package. Make sure it makes sense to do this with your data! It may make more since to simply drop somebody. 
+
+#Usually avoid using imputation in work setting due to legality concerns.
+```{r}
+library(mice)
+
+temp_nomiss <- mice(replace_people)
+
+nomiss <- complete(temp_nomiss, 1)
+
+summary(nomiss)
+
+```
+
+## Outlier Detection
+
+Now let's look for outliers with Mahalanobis.
+
+Take just the items, no demographics.
+
+```{r}
+nomiss_25 <- nomiss[,1:25]
+```
+
+#No miss has 28 columns but we don't need to do the analysis on the last three since they're not items we're worried about. No miss gives us just one through 25, only gives us 25 variables. The more robust way is below.
+
+We could have also done the following with the `select` function from the `tidyverse`.
+```{r}
+nomiss_25 <- nomiss %>%
+    select(-c(gender,
+              education,
+              age))
+```
+
+#This way is more robust and reasonable because it allows for the possibility that the data may change positions.
+
+```{r}
+##outliers
+cutoff = qchisq(1-.001, ncol(nomiss_25))
+mahal = mahalanobis(nomiss_25,
+                    colMeans(nomiss_25),
+                    cov(nomiss_25))
+cutoff ##cutoff score
+ncol(nomiss_25) ##df
+summary(mahal < cutoff)
+```
+#setting cutoff score, creating mahal and then finding columns that exceed the cutoff. We've found 90ish outliers. Located in mahal_out following next two chunks. Cutoff score is based off a chisquared value (52.61966) Extreme values would exceed these.
+
+In this case FALSE is bad.
+
+Let's take a look at those labeled outliers.
+
+```{r} 
+nomiss_mahal <- nomiss_25 %>%
+    bind_cols(mahal) %>%
+    rename(mahal = `...26`) # renaming the new column "mahal"
+```
+
+Take a look at the 81 flagged as "FALSE".
+
+```{r}
+mahal_out <- nomiss_mahal %>%
+    filter(mahal > cutoff) %>%
+    arrange(desc(mahal)) # sort mahal values from most to least
+```
+It looks like these may be examples of extreme responding (all high or low values), however make sure you sit with the data and really understand why it is being flagged as an outlier.
+
+For now, let's omit them.
+
+#normally would keep them in even though they're outliers and document accordingly.
+
+## Outlier Omission
+
+```{r}
+##exclude outliers
+noout <- nomiss %>%
+    filter(mahal < cutoff)
+```
+#Statistics of Doom youtube channel in video below.
+
+## Additivity
+
+Now we'll take a look at additivity.
+
+```{r}
+##additivity
+correl = cor(noout, use = "pairwise.complete.obs")
+
+symnum(correl)
+
+correl
+```
+
+We are looking for any 1s off the diagonal.
+
+Now, we will set up the rest of the assumptions. We must use a fake regression analysis because, while EFA is regression to the extreme, you still have to screen it with a regular regression analysis. 
+
+Here, the chisq value can be anything larger than 2 (7 seems to work well as it gives enough variability for the procedure to work well). The purpose of this regression is that since the data is fake from a generated random number, there shouldn't be any pattern to the residuals. If there is a pattern [fill in what that means]. For a more in depth explanation go to this [video](https://www.youtube.com/watch?v=yv0X1qyNTXQ&t=1091s) and skip to 17:54.
+
+We are using real data to predict a noise variable. The predictions should be random so the errors should be random. The errors should be random in a real analysis because of independence. If it isn't random, then there is something going on in the background.
+
+```{r}
+##assumption set up
+random = rchisq(nrow(noout), 7)
+fake = lm(random~., # Y is predicted by all variables in the data
+          data = noout) # You can use categorical variables now!
+standardized = rstudent(fake) # Z-score all of the values to make it easier to interpret.
+fitted = scale(fake$fitted.values)
+```
+
+Check the residuals.
+
+
+```{r}
+##normality
+hist(standardized)
+```
+
+## Heteroscedasticity
+### Breusch-Pagan Test
+
+From: [How to Perform a Breusch-Pagan Test in R](https://www.statology.org/breusch-pagan-test-r/)
+
+
+```{r}
+#load lmtest library
+library(lmtest)
+
+#perform Breusch-Pagan Test
+bptest(fake)
+```
+
+The test statistic is XXX and the corresponding p-value is XXX. Since the p-value is not less than 0.05, we fail to reject the null hypothesis. We do not have sufficient evidence to say that heteroscedasticity is present in the regression model.
+
+
+
+## Q-Q Plot
+
+Check linearity using qqplot.
+
+```{r}
+##linearity
+qqnorm(standardized)
+abline(0,1)
+
+```
+
+If you just asked yourself, "what's a Q-Q plot?", go [here](https://data.library.virginia.edu/understanding-q-q-plots/).
+
+What should we see? A lot close to zero and fewer farther away. An "S" shape implies a cubic relationship. A "U" shape implies a squared relationship. Generally, we only look between -2 and 2. It is hard to deal with data at the edges.
+
+#Not quite a hammock, if it was an S it might be cubic.
+
+## Homogeneity
+
+Check homogeneity.
+
+If you just asked yourself, "what's homogeneity?" go [here](http://www.sthda.com/english/wiki/compare-multiple-sample-variances-in-r).
+
+```{r}
+##homogeneity
+plot(fitted,standardized)
+abline(0,0)
+abline(v = 0)
+```
+#Looking for a shape here, a "megaphone" shape is a redflag.
+
+There appears to be some skew and non-normality, but we will press ahead.
+
+## Bartlett's Test
+
+We'll check correlation adequacy with Bartlett's test.
+
+```{r}
+##correlation adequacy Bartlett's test
+cortest.bartlett(correl, n = nrow(noout))
+```
+
+## Kaiser, Meyer, Olkin Measure of Sampling Adequacy (KMO) Test
+
+That was significant meaning we have large enough correlations for EFA. Now we will run KMO. We want high values close to 1.
+
+```{r}
+##sampling adequacy KMO test
+KMO(correl[,1:25])
+```
+
+The mean sampling adequacy (MSA) was .94, which is a good score.
+
+If we had decided for whatever reason to not impute the data and simply drop it, we could have used the code below and verifed the dropped data with the following plot. For now this code is commented out (which you can do by highlighting it and pressing SHIFT + CTRL + C in RStudio)
+
+```{r}
+#' Let's drop the missing data for now
+
+# Data <- na.omit(Data)
+
+#' Check for missing data again
+
+# missmap(Data, y.at=c(1), y.labels=c(''), col=c('yellow', 'black'))
+```
+
+OK, it seems this data is OK to run an EFA on. Let's go ahead and make our "noout" object that was the final result of our adequacy testing back into our "Data".
+
+```{r}
+Data <- noout
+```
+
+Notice over in your Global Environment panel in the upper right that the data has gone from 2800 to 2636.
+
+Let's get to know our data. Take a look at the columns with `colnames`.
+
+```{r}
+colnames(Data)
+
+```
+
+If you want to make a list, get the names into Excel, etc., you can wrap your function in `dput`.
+
+```{r}
+dput(colnames(Data))
+```
+
+Or you can use `cat()` as a wrapper.
+
+#backslash n is a line break, backslash n comma is a linebreak with a comma after.
+
+```{r}
+cat(colnames(Data), sep = "\n")
+```
+
+Or, you can throw a common into the separator if you want to automatically include that to paste somewhere else in your R script.
+
+```{r}
+cat(colnames(Data), sep = ",\n")
+```
+
+
+# Exploratory Factor Analysis (EFA)
+
+First, we need to split our data into a Training and a Test set. Often times this is done 80/20, or 70/30, but we'll do 50/50 today. Who here has split their data like this before? We (I) never did this in grad school.
+
+
+##SPLITTING DATA FOR HOMEWORK 50-50 for factor analysis data. Can do training for EFA and test for CFA, could potentially split it three ways for SEM.
+
+
+MAKE SURE TO SET YOUR SEED!!!!!!!!!!!!
+This will allow you to get the exact same results every time as it keeps the "random" "constant".
+
+```{r}
+#' <!-- ####################################################################################################### -->
+#' <!-- ####################################################################################################### -->
+#' <!-- ##########################EXPLORATORY FACTOR ANALYSIS ################################################# -->
+
+#' ## Split Data into Training and Test set
+
+#' Now we will split the data into a training (EFA) and test (CFA) set.
+
+#' We will also leave the missing data as is for now.
+
+set.seed(2019) #This can be any number. Remember to mix up your set.seed() number if you will be using it a lot as it isn't technically "random".
+
+```
+
+Let's create an ID variable for our data set.
+
+```{r}
+#' Let's create an ID variable for our data set.
+
+Data <- Data %>% 
+    mutate(ID = row_number())
+```
+
+Where did it put the ID? 
+
+#ID will fall at the end, kind of annoying.
+
+How do you know?
+
+```{r}
+# colnames(Data) # Use SHIFT + CTRL + C to uncomment and recomment
+```
+
+Let's move it to the front. Anybody know how?
+
+```{r}
+Data <- Data %>%
+    dplyr::select(ID, everything())
+```
+
+#Used select, selected ID, and then moves it to front Package colon colon function ensures function runs under the needed package.
+
+Check your columns again to make sure it moved.
+
+```{r}
+colnames(Data)
+```
+
+
+Now we will create our Training and Test set.
+
+```{r}
+training <- sample(Data$ID, length(Data$ID)*0.5)
+
+Data_training <- subset(Data, ID %in% training)
+Data_test <- subset(Data, !(ID %in% training))
+```
+
+Who here is familiar with the `%in%` function? Who here is familiar with using `!` to designate NOT in logical programming? You use `%in%` to subset a df with another separate df. 
+
+#setting up object using ID column from data and taking half of the IDs length from data to make the size of training.
+#subsetting the data IDs that are in training into data_training
+#subsetting the remaining data that's not in training into data_test
+
+I just remembered we forgot to visualize the data. A histogram will do for now.
+
+```{r}
+hist(Data_training$A1, breaks = 6)
+hist(Data_training$A2, breaks = 6)
+hist(Data_training$A3, breaks = 6)
+hist(Data_training$A4, breaks = 6)
+hist(Data_training$A5, breaks = 6)
+hist(Data_training$C1, breaks = 6)
+hist(Data_training$C2, breaks = 6)
+hist(Data_training$C3, breaks = 6)
+hist(Data_training$C4, breaks = 6)
+hist(Data_training$C5, breaks = 6)
+hist(Data_training$E1, breaks = 6)
+hist(Data_training$E2, breaks = 6)
+hist(Data_training$E3, breaks = 6)
+hist(Data_training$E4, breaks = 6)
+hist(Data_training$E5, breaks = 6)
+hist(Data_training$N1, breaks = 6)
+hist(Data_training$N2, breaks = 6)
+hist(Data_training$N3, breaks = 6)
+hist(Data_training$N4, breaks = 6)
+hist(Data_training$N5, breaks = 6)
+hist(Data_training$O1, breaks = 6)
+hist(Data_training$O2, breaks = 6)
+hist(Data_training$O3, breaks = 6)
+hist(Data_training$O4, breaks = 6)
+hist(Data_training$O5, breaks = 6)
+```
+
+Ok, that's very cool, but what if we wanted all 25 in the same graph?
+
+```{r}
+par(mfrow =c(5,5))
+
+# hist(Data_training$A1, breaks = 6)
+# hist(Data_training$A2, breaks = 6)
+# hist(Data_training$A3, breaks = 6)
+# hist(Data_training$A4, breaks = 6)
+# hist(Data_training$A5, breaks = 6)
+# hist(Data_training$C1, breaks = 6)
+# hist(Data_training$C2, breaks = 6)
+# hist(Data_training$C3, breaks = 6)
+# hist(Data_training$C4, breaks = 6)
+# hist(Data_training$C5, breaks = 6)
+# hist(Data_training$E1, breaks = 6)
+# hist(Data_training$E2, breaks = 6)
+# hist(Data_training$E3, breaks = 6)
+# hist(Data_training$E4, breaks = 6)
+# hist(Data_training$E5, breaks = 6)
+# hist(Data_training$N1, breaks = 6)
+# hist(Data_training$N2, breaks = 6)
+# hist(Data_training$N3, breaks = 6)
+# hist(Data_training$N4, breaks = 6)
+# hist(Data_training$N5, breaks = 6)
+# hist(Data_training$O1, breaks = 6)
+# hist(Data_training$O2, breaks = 6)
+# hist(Data_training$O3, breaks = 6)
+# hist(Data_training$O4, breaks = 6)
+# hist(Data_training$O5, breaks = 6)
+```
+
+We'll get an error here, but that will probably work in your console.
+
+Ok, now let's take a look at the correlation matrix using the `corrr` package.
+
+#correlating all the data, shave removes the top redundant triangle of values.
+
+```{r}
+library(corrr)
+
+Cor_Mat <- Data_training %>%
+    correlate() %>% 
+    shave() %>% # Remove upper triangle
+    fashion() # Print in nice format
+
+print(Cor_Mat)
+```
+
+That is informative, but huge. Is there a better way?
+Yes!
+Enter the `flattenCorrMatrix` function.
+
+```{r}
+#Flatten Correlation Matrix Function
+
+flattenCorrMatrix <- function(cormat, pmat, nmat) {
+    ut <- upper.tri(cormat)
+    data.frame(
+        row = rownames(cormat)[row(cormat)[ut]],
+        column = rownames(cormat)[col(cormat)[ut]],
+        cor  =(cormat)[ut],
+        p = pmat[ut],
+        n = nmat[ut]
+    )
+}
+
+```
+
+You will need the `Hmisc` package for this one so let's install it now.
+```{r}
+#install.packages("Hmisc", dependencies = TRUE)
+library(Hmisc)
+```
+
+We will need to change our Data_training DF into a Matrix. Anybody know how to do this? Remember we don't actually want to change the DF into a MATRIX, so we will create a new object and throw _MAT after it so we don't get confused. If you have a naming convention that works better for you, go for it.
+
+#turning it into a matrix because thats how Hmisc needs it in order to function
+
+```{r}
+#As a matrix
+Data_training_MAT <- as.matrix(Data_training)
+
+```
+
+Now we will use the `rcorr` function from `Hmisc` to get a the correlation matrix to feed into our `flattenCorrMatrix` function.
+
+```{r}
+library(Hmisc)
+#install.packages("checkmate", dependencies = TRUE)
+library(checkmate)
+res <- rcorr(Data_training_MAT)
+print(res)
+
+```
+
+
+
+```{r}
+# Old way
+
+library(dplyr)
+Data_Flat_Cor_Mat <- flattenCorrMatrix(res$r, res$P, res$n) #these p values match SPSS
+
+Data_Flat_Cor_Mat[,3:5] <- round(Data_Flat_Cor_Mat[,3:5], 3)
+
+#Adding * to any correlation with p<0.05
+Data_Flat_Cor_Mat <- Data_Flat_Cor_Mat %>%
+    mutate(Sig = ifelse(p < 0.05, paste0(p, "*"),
+           p))
+
+Data_Flat_Cor_Mat
+
+```
+
+#can kick it out to excel in order to search for terms. Always want an n count to make sure the numbers line up.
+
+```{r}
+# New way
+
+library(corrr)
+
+Data_Flat_Cor_Mat_stretch <- Data_training %>%
+    select(-ID) %>% # remove ID variable since we don't need it
+    correlate() %>% # calculate correlations
+    stretch() %>% # make it tall
+    fashion() # round it
+
+Data_Flat_Cor_Mat_stretch
+```
+
+#code is easier to read like this, can pull data frame into enviroment. Both frames can be pulled out to look at correlations.
+
+Isn't that much better?
+
+You can even filter. Let's say we only wanted to see how Agreeableness items correlated with all the other items.
+```{r}
+#Filtering
+
+AGR_Items <- c("A1",
+                  "A2",
+                  "A3",
+                  "A4",
+                  "A5")
+
+
+Data_Flat_Cor_Mat <- Data_Flat_Cor_Mat %>%
+    filter(row %in% AGR_Items) %>%
+    filter(!column %in% AGR_Items)
+
+Data_Flat_Cor_Mat
+
+```
+
+That's AMAZING!!!!!!!
+
+But can I get it into Excel?
+
+Yup...
+
+```{r}
+#openxlsx::write.xlsx(Data_Flat_Cor_Mat, "00_Data/Survey_Outcome_Corrs.xlsx")
+```
+
+Ok, back to Exploratory Factor Analysis, which remember, is all about correlations.
+
+We will use [Parallel Analysis](https://en.wikipedia.org/wiki/Parallel_analysis) with a journal article [here](https://journals.sagepub.com/doi/pdf/10.1177/1094428104263675) to give us a baseline for factor retention. Often times you will simply be given data and asked how many factors there are. You may have some a priori feelings to this number, but it is also good to let the data guide you.
+
+```{r}
+library(psych)
+fa.parallel(Data_training)
+```
+
+Hmmm, that seems high. Did we only run that on the items or did we include ID, gender, education, and age...
+#Yes, yes we did.
+```{r}
+fa.parallel(Data_training[c(2:26)])
+```
+
+#Use n-2 for the factors that pop out because we're working under the assumption that there is a more parsimonious solution. So 4 factors. Going to keep doing this for interpretability.
+
+That's better. So what is it telling us?
+
+Ok, let's start with a 4 factor solution and work up.
+
+NOTE: The variable naming convention is as follows:
+* fa = Factor Analysis
+* ml = Maximum Likelihood (the method of factor analysis we are using)
+* 4 = the number of factors we think are in the data
+* trn = the training data (as opposed to the test data where we would run a follow up CFA to "confirm" the factor structure)
+
+```{r}
+fa_ml_4_trn <- fa(Data_training[c(2:26)], nfactors = 4, fm="ml")
+
+print(fa_ml_4_trn)
+```
+
+#ML since we used max likelihood. Can refer to meanings in the slides.
+
+Can we make this any clearer? Yes, we'll run that again and cutoff any factor loadings less that 0.3.
+
+```{r}
+print(fa_ml_4_trn$loadings, cutoff = .3) #.3 gives us the opportunity to see if there are crossloadings, we can adjust later based off that if needed,
+```
+
+Is this interpreable yet?
+
+No, we need to rotate. 
+
+Does rotation improve fit?
+
+What kind of rotation should we do? 
+
+Are these personality factors correlated with each other?
+
+If so, should we use Orthogonal or Oblique rotation?
+
+```{r}
+fa_ml_4_trn <- fa(Data_training[c(2:26)], nfactors = 4, fm="ml", rotate="oblimin")
+
+print(fa_ml_4_trn)
+
+print(fa_ml_4_trn$loadings, cutoff = .3)
+```
+
+What is it called when an item loads on two or more factors?
+
+Do we have that going on? 
+
+Do we have a simple structure?
+
+Let's try a 5 factor solution.
+
+#Tucker lewis should be .95 but usually around .87ish
+
+```{r}
+fa_ml_5_trn <- fa(Data_training[c(2:26)], nfactors = 5, fm="ml", rotate="oblimin")
+
+print(fa_ml_5_trn)
+
+print(fa_ml_5_trn$loadings, cutoff = 0.3)
+```
+
+Still cross loading. Let's drop some items and see what happens.
+
+```{r}
+# Data_training_MOD <- Data_training %>%
+#     select(-c(A5, E3, N4, O4))
+
+Data_training_MOD <- Data_training %>%
+    dplyr::select(-c(E3, E4, N4, O4)) #select with -c ends up putting them at the back.
+
+# Data_training_MOD <- Data_training %>%
+#     dplyr::select(-c(E4, N4, O4))
+```
+
+And run it again. Don't forget to check your `colnames` so you know where everything is.
+
+```{r}
+colnames(Data_training_MOD)
+```
+
+```{r}
+fa_ml_5_trn_MOD <- fa(Data_training_MOD[c(2:22)], nfactors = 5, fm="ml", rotate="oblimin") # make sure the [2:XX] reflects the correct columns after removing items
+
+print(fa_ml_5_trn_MOD)
+
+print(fa_ml_5_trn_MOD$loadings, cutoff = .3)
+```
+
+There is our simple structure. 
+
+Now that we have our simple structure, what if we want to put the factor loadings into a spread sheet? Can we do that?
+
+I'm glad you asked!
+
+```{r}
+fa_ml_5faclds <- as.data.frame(unclass(fa_ml_5_trn_MOD$loadings)) #unclass splits things apart
+
+fa_ml_5faclds
+
+```
+
+Can we pretty that up by say, rounding to 3 decimal places?
+
+```{r}
+fa_ml_5faclds <- as.data.frame(round(unclass(fa_ml_5_trn_MOD$loadings), 3))
+
+fa_ml_5faclds
+```
+
+
+```{r}
+openxlsx::write.xlsx(fa_ml_5faclds, "C:/Advanced Analytics Project/00_Data/fa_ml_5faclds.xlsx")
+```
+
+Hmmmm, no item names. Can we get item names? 
+
+```{r}
+fa_ml_5_factor_loadings <- as.data.frame(round(unclass(fa_ml_5_trn_MOD$loadings), 3)) %>%
+    tibble::rownames_to_column("items") # "items" is what we want to call the column. You can make this anything
+# Where did I learn this? 
+# https://stackoverflow.com/questions/29511215/how-can-i-convert-row-names-into-the-first-column
+# Bread crumbs...
+```
+
+```{r}
+openxlsx::write.xlsx(fa_ml_5_factor_loadings, "C:/Advanced Analytics Project/00_Data/fa_ml_5_factor_loadings.xlsx")
+```
+
+
+#next we grab the correlations and then make conditional formatting to find anything greater than 0.299 and things less than -.299
+#From here we send it to the team to ask them if the factors make sense with all the models and then figuring out how we want to deploy. This will contain all the documentation on why items were selected and why items were put in certain factors.
+
+If you have additional EFA questions, there are several great resources on the internet. You may want to start with [Exploratory factor analysis: A five-step guide for novices](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.414.4818&rep=rep1&type=pdf).
+
+## Scale building
+
+Now that you have your items from your EFA we need to check out their properties as a scale.
+
+We are dealing with Big 5 data. I'm guessing you are familiar with this, but if not we can do a quick refresher.
+
+We will now clean up the data so we can do some scale analysis on it. In order to do this, we want to create a dataframe that only has the items of interest. We'll call on the `dplyr` library and specifically the `select` function which is how you select columns. Instead of selecting the 23 (out of 25 items) remaining columns we want, we will deselect the 4 that we don't.
+
+```{r}
+library(dplyr)
+bfi_items <- Data_training_MOD %>%
+    dplyr::select(-c(gender, education, age, ID))
+```
+
+Notice that a df for bfi_items has appeared in our Global Environment with 23 columns instead of 27.
+
+We need to tell R how to code the items and to do this we will use the `make.keys` function from the `psych` package. We need to make a list of the keys.
+
+Before we do this, we need to check on the names of the remaining items and also if they might be reverse scored.
+
+Let's try the `skimr` package.
+
+```{r}
+library(skimr)
+
+skim(bfi_items) #Can run it in console in order to get the histograms. Sometimes its just better to run things in the console.
+```
+
+From the histograms it list at the end of each item, it looks like the following items need to be reverse scored.
+* A1
+* C4
+* C5
+* E1
+* E2
+* O2
+* O5
+
+Note: we are not reverse scoring the neuroticism items. You can take a look at those items with the following command. Just make sure to remove the hashtag.
+
+```{r}
+# ?bfi
+```
+
+
+```{r}
+# Original list of items. Remember, we had to drop some that were cross-loading.
+# bfi_keys_list <- list(agree=c(-1, 2, 3, 4, 5),
+#                         consc=c(6, 7, 8, -9, -10),
+#                         extra=c(-11, -12, 13, 14, 15),
+#                         neuro=c(16, 17, 18, 19, 20),
+#                         open=c(21, -22, 23, 24, -25))
+
+# bfi_keys_list <- list(agree = c(-1, 2, 3, 4, 5),
+#                       consc = c(6, 7, 8, -9, -10),
+#                       extra = c(-11, -12, 13, 14, 15),
+#                       neuro = c(16, 17, 18, 19), #4 items here because we dropped one
+#                       open = c(20, -21, 22, -23) #4 items here because we dropped one
+#                       )
+
+bfi_keys_list <- list(agree = c(1, 2, 3, 4, 5),
+                      consc = c(6, 7, 8, 9, 10),
+                      extra = c(11, 12, 13), # 3 items here because we dropped two
+                      neuro = c(14, 15, 16, 17), #4 items here because we dropped one
+                      open = c(18, 19, 20, 21) #4 items here because we dropped one
+                      )#negatives are for reverse scorings.
+
+bfi_keys <- make.keys(bfi_items, bfi_keys_list, item.labels = colnames(bfi_items))
+```
+
+Now we will score the items.
+
+```{r}
+scores <- scoreItems(bfi_keys, bfi_items, impute = "none", 
+                         min = 1, max = 6, digits = 3)
+
+head(scores$scores)
+
+scores_df <- as.data.frame(scores$scores)
+```
+
+Notice that I used the $ designator for a variable within a df the scores variable within the scores df, wrapped it with `as.data.frame` and then made it into a new df called scores_df.
+
+Now we'll split out each factor individually to do scale analysis. We can use `select` again and pair it with the helper function `starts_with`. So what letter will we chose for Agreeableness?
+
+```{r}
+#' Now let's split out the data into factors for easier analysis
+AGR <- bfi_items %>%
+    dplyr::select(starts_with("A"))
+
+CON <- bfi_items %>%
+    dplyr::select(starts_with("C"))
+
+EXT <- bfi_items %>%
+    dplyr::select(starts_with("E"))
+
+NEU <- bfi_items %>%
+    dplyr::select(starts_with("N"))
+
+OPN <- bfi_items %>%
+    dplyr::select(starts_with("O"))
+```
+
+## Scale reliability analysis of Agreeableness
+
+```{r}
+# AGR_ALPHA <- alpha(x = AGR[, abs(bfi_keys_list$agree)], keys = bfi_keys) Used back we ended up having overlap
+```
+
+What happened? Why are we getting an error? This is where google is your friend, but I will go ahead and save you the trouble (for now) and say that it is using the `alpha` from `ggplot2` instead of `alpha` from the `psych` package. Does anybody know how to fix this?
+
+```{r}
+# AGR_ALPHA <- psych::alpha(x = AGR[, abs(bfi_keys_list$agree)], keys = bfi_keys)
+```
+
+Nope. Still getting an error. It appears they have changed the `psych` package since last year.
+
+Ok, what we will need to do now is create the keys by individual scale.
+
+```{r}
+bfi_keys_list <- list(agree=c(-1, 2, 3, 4, 5))
+
+bfi_keys <- make.keys(AGR, bfi_keys_list, item.labels = colnames(AGR))
+```
+
+If you figure out a different way, please let me know.
+
+```{r}
+AGR_ALPHA <- psych::alpha(x = AGR[, abs(bfi_keys_list$agree)], keys = bfi_keys)
+```
+
+```{r}
+AGR_total <- round(as.data.frame(AGR_ALPHA$total), 3)
+AGR_alpha_drop <- round(as.data.frame(AGR_ALPHA$alpha.drop), 3)
+AGR_item_stat <- round(as.data.frame(AGR_ALPHA$item.stats), 3)
+
+AGR_ALPHA
+```
+
+Alright, let's step through some of this. 
+
+* raw_alpha is alpha based upon the covariance.
+* std.alpha is the standardized alpha based upon the correlations
+* G6(smc) is Guttman's Lamda 6 reliability
+* average_r is the average interitem correlation
+* median_r is the median interitem correlation
+* raw.r is the correlation of each item with the total score, not corrected for item overlap
+* std.r is the correlation of each item with the total score (not corrected for item overlap) if the items were all standardized
+* r.cor is item whole correlation corrected for item overlap and scale reliability
+* r.drop is item whole correlation for this item against the scale without this item
+
+Since the `r.drop` for all of the items is lower than the reliability of the overall scale, we should probably keep all of these items.
+
+## Scale reliability analysis of Conscientiousness
+
+Now, we will look at conscientiousness (CON).
+
+```{r}
+bfi_keys_list <- list(agree=c(1, 2, 3, -4, -5))
+#Notice we have adjusted the reverse scoring from the first item of the scale to the 4th and 5th
+
+bfi_keys <- make.keys(CON, bfi_keys_list, item.labels = colnames(CON))
+```
+
+Again, if you figure out a different way to make keys for all the scales at once, please let me know.
+
+```{r}
+CON_ALPHA <- psych::alpha(x = CON[, abs(bfi_keys_list$agree)], keys = bfi_keys)
+```
+
+```{r}
+CON_total <- round(as.data.frame(CON_ALPHA$total), 3)
+CON_alpha_drop <- round(as.data.frame(CON_ALPHA$alpha.drop), 3)
+CON_item_stat <- round(as.data.frame(CON_ALPHA$item.stats), 3)
+
+CON_ALPHA
+```
+
+How do these 5 items look? How is the overall reliability of the scale? Would you drop any of these items?
+
+Now, on you own, get the reliability information for the other 4 factors.
+
+For another take on EFA and scale building, check out Statistics of Doom (Dr. Erin Buchanan) starting [here](https://www.youtube.com/watch?v=EKpYh7lsOf8).
+
+# Within-Group Agreement and Reliability
+
+The data used in this section are taken from Bliese, Halverson & Rothberg (2000). The examples are based upon the bhr2000 data set from the multilevel package. Thus, the first step is to make the bhr2000 data set available for analysis and examine the properties of the dataframe.
+
+```{r, eval = TRUE}
+# help(bhr2000)
+# help(alpha)
+data(bhr2000)#imports the data into the working environment
+names(bhr2000)
+nrow(bhr2000)
+```
+
+
+The names function identifies 14 variables. The first one, GRP, is the group identifier. The variables in columns 2 through 12 are individual responses on 11 items that make up a leadership scale. HRS represents individuals’ reports of work hours, and RELIG represents individuals’ reports of the degree to which religion is a useful coping mechanism. The nrow command indicates that there are 5400 observations. To find out how many groups there are we can use the length command in conjunction with the unique command
+
+```{r}
+length(unique(bhr2000$GRP))
+```
+#99 rows of data
+There are several functions in the multilevel library that are useful for calculating and interpreting agreement indices. These functions are rwg, rwg.j, rwg.sim, rwg.j.sim, rwg.j.lindell, awg, ad.m, ad.m.sim and rgr.agree. The rwg function calculates the James, Demaree & Wolf (1984) rwg for single item measures; the rwg.j function calculates the James et al. (1984) rwg(j) for multi-item scales. The rwg.j.lindell function calculates r*wg(j) (Lindell, & Brandt, 1997; 1999). The awg function calculates the awg agreement index proposed by Brown and Hauenstein (2005). The ad.m function calculates average deviation (AD) values for the mean or median (Burke, Finkelstein & Dusig, 1999). A series of functions with “sim” in the name (rwg.sim, rwg.j.sim and ad.m.sim) allow one to simulateagreement values from a random uniform distribution to test for statistical significance agreement. The simulation functions are based on work by Dunlap, Burke and Smith-Crowe (2003); Cohen, Doveh and Eich (2001) and Cohen, Doveh and Nuham-Shani (2009). Finally, the rgr.agree function performs a Random Group Resampling (RGR) agreement test (see
+Bliese, et al., 2000).
+
+In addition to the agreement measures, there are two multilevel reliability measures, ICC1 and ICC2 than can be used on ANOVA models. As Bliese (2000) and others (e.g., Kozlowski & Hattrup, 1992; Tinsley & Weiss, 1975) have noted, reliability measures such as the ICC(1) and ICC(2) are fundamentally different from agreement measures; nonetheless, they often provide complementary information to agreement measures, so this section illustrates the use of each of these functions using the dataframe bhr2000.
+
+3.3.1 Agreement: rwg, rwg(j), and r*wg(j)
+
+Both the rwg and rwg.j functions are based upon the formulations described in James et al. (1984). Both functions require the user to specify three pieces of information. The first piece of information is the variable of interest (x), the second is the grouping variable (grpid), and third is the estimate of the expected random variance (ranvar). The default estimate of ranvar is 2, which is the expected random variance based upon the rectangular distribution for a 5-point item calculated using the formula ranvar=(A^2-1)/12 where A represents the number of response options associated with the scale anchors. See help(rwg), James et al., (1984), or Bliese et al., (2000) for details on selecting appropriate ranvar values. To use the rwg function to calculate agreement for the coping using religion item (RELIG in the bhr2000 dataframe) one would issue the following commands.
+
+```{r}
+RWG.RELIG<-rwg(bhr2000$RELIG,bhr2000$GRP,ranvar=2)
+RWG.RELIG[1:10,] #examine first 10 rows of data
+```
+
+This returns a dataframe with three columns. The first column contains the group names (grpid), the second column contains the 99 rwg values – one for each group. The third column contains the group size. To calculate the mean rwg value use the summary command:
+
+```{r}
+summary(RWG.RELIG)
+```
+
+The summary command informs us that the average rwg value is .186 and the range is from 0 to 0.433. By convention, values at or above 0.70 are considered good agreement, so there appears to be low agreement among individuals with regard to coping using religion. The summary command also provides information about the group sizes. Other useful options might include sorting the values or examining the values in a histogram. Recall that the notation [,2] selects all rows and the second column of the RWG.RELIG object
+– the column with the rwg results.
+
+```{r}
+sort(RWG.RELIG[,2])
+hist(RWG.RELIG[,2])
+```
+
+To calculate rwg for work hours, the expected random variance (EV) needs to be changed from its default value of 2. Work hours was asked using an 11-point item, so EV based on the rectangular distribution is 10.00.
+
+```{r}
+RWG.HRS<-rwg(bhr2000$HRS,bhr2000$GRP,ranvar=10.00)
+mean(RWG.HRS[,2])
+```
+
+There is apparently much higher agreement about work hours than there was about whether group members used religion as a coping mechanism in this sample. By convention, this mean value would indicate agreement because rwg (and rwg(j)) values above .70 are considered to provide evidence of agreement. The use of the rwg.j function is nearly identical to the use of the rwg function except that the first argument to rwg.j is a matrix instead of a vector. In the matrix, each column represents one item in the multi-item scale, and each row represents an individual response. For instance, columns 2-12 in bhr2000 represent 11 items comprising a leadership scale. The items were assessed using 5-point response options (Strongly Disagree to Strongly Agree), so the expected random variance is 2.
+
+```{r}
+RWGJ.LEAD<-rwg.j(bhr2000[,2:12],bhr2000$GRP,ranvar=2)
+summary(RWGJ.LEAD)
+```
+
+Note that Lindell and colleagues (Lindell & Brandt, 1997, 1999; 2000; Lindell, Brandt & Whitney, 1999) have raised concerns about the mathematical underpinnings of the rwg(j) formula. Specifically, they note that this formula is based upon the Spearman-Brown reliability estimator. Generalizability theory provides a basis to believe that reliability should increase as the number of measurements increase, so the Spearman-Brown formula is defensible for measures of reliability. There may be no theoretical grounds, however, to believe that generalizability theory applies to measures of agreement. That is, there may be no reason to believe that agreement  should increase as the number of measurements increase (but also see LeBreton, James & Lindell, 2005).
+
+To address this potential concern with the rwg(j), Lindell and colleagues have proposed the `r*wg(j)`. The `r*wg(j)` is calculated by substituting the average variance of the items in the scale into the numerator of rwg formula in lieu of using the rwg(j) formula (rwg = 1- Observed Group Variance/Expected Random Variance). Note that Lindell and colleagues also recommend against truncating the Observed Group Variance value so that it matches the Expected Random Variance value in cases where the observed variance is larger than the expected variance. This results in a case where `r*wg(j)` values can take on negative values. We can use the function rwg.j.lindell to estimate the `r*wg(j)` values for leadership.
+
+```{r}
+RWGJ.LEAD.LIN<-rwg.j.lindell(bhr2000[,2:12],
+bhr2000$GRP,ranvar=2)
+summary(RWGJ.LEAD.LIN)
+```
+
+The average `r*wg(j)` value of .43 is considerably lower than the average rwg(j) value of .89 listed earlier.
+
+Continue reading through the `multilevel` manual for how to use the other methods of Within-Group Agreement and Reliability.
+
+# Just the code
+
+```{r ref.label = knitr::all_labels(), echo = TRUE, eval = FALSE}
+
+```
