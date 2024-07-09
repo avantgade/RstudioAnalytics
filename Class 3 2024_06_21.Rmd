@@ -44,7 +44,7 @@ Let’s get started.
 
 A final machine learning model is a model that you use to make predictions on new data.
 
-That is, given new examples of input data, you want to use the model to predict the expected output. This may be a classification (assign a label) or a regression (a real value).
+That is, given new examples of input data, you want to use the model to predict the expected output. This may be a classification (assign a label) or a regression (a real value)..
 
 For example, whether the photo is a picture of a dog or a cat, or the estimated number of sales for tomorrow.
 

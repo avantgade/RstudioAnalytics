@@ -7,7 +7,7 @@ output:
 
 ```{r}
 # Clear workspace 
-# This will clear your Global Environment of all files to start fresh. If you do not want to do this, change {r} to {r, eval = FALSE} for this code chunk.
+# This will clear your Global Environment of all files to start fresh. If you do not want to do this, change {r} to {r, eval = FALSE} for this code chunks.
 rm(list = ls())
 options(stringsAsFactors = FALSE)
 ```

@@ -6,7 +6,7 @@ output: html_document
 
 # Support Vector Machines
 
-This lab will take a look at support vector machines, in doing so we will explore how changing the hyperparameters can help improve performance. 
+This lab will take a look at support vector machines, in doing so we will explore how changing the hyperparameters can help improve performances. 
 This chapter will use [parsnip](https://www.tidymodels.org/start/models/) for model fitting and [recipes and workflows](https://www.tidymodels.org/start/recipes/) to perform the transformations, and [tune and dials](https://www.tidymodels.org/start/tuning/) to tune the hyperparameters of the model.
 
 ```{r, message=FALSE}
