@@ -1,0 +1,778 @@
+---
+title: "AA HW3 Praful Gade"
+author: "Praful Gade"
+date: "2024-07-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#From: (https://www.kaggle.com/esmaeil391/ibm-hr-analysis-with-90-3-acc-and-89-auc)
+
+```{r, echo = FALSE, include= FALSE, warning = FALSE, message = FALSE}
+#' <!-- ####################################################################################################### -->
+#' <!-- ####################################################################################################### -->
+#' <!-- ##################################LOADING PACKAGES##################################################### -->
+
+tryCatch(require(pacman),finally=utils:::install.packages(pkgs='pacman',repos='http://cran.r-project.org'));
+require(pacman)
+
+#' <!-- ##if the above doesn't work, use this code## -->
+#' <!-- ##tryCatch -->
+#' <!-- #detach("package:pacman", unload = TRUE) -->
+#' <!-- #install.packages("pacman", dependencies = TRUE) -->
+#' <!-- # ## install.packages("pacman") -->
+
+pacman::p_load(digest,
+               readxl,
+               readr,
+               dplyr,
+               tidyr,
+               ggplot2,
+               knitr,
+               MASS,
+               RCurl,
+               DT,
+               modelr,
+               broom,
+               purrr,
+               pROC,
+               data.table,
+               VIM,
+               gridExtra,
+               Metrics,
+               randomForest,
+               e1071,
+               corrplot,
+               DMwR2,
+               rsample,
+               skimr,
+               psych,
+               conflicted,
+               tree,
+               tidymodels,
+               janitor,
+               GGally,
+               tidyquant,
+               doParallel,
+               Boruta,
+               correlationfunnel,
+               naniar,
+               plotly,
+               themis,
+               questionr,
+               tidylog
+)
+
+# Loading from GitHub
+pacman::p_load_current_gh("agstn/dataxray")
+```
+
+```{r, echo = FALSE, include= FALSE, warning = FALSE, message = FALSE}
+
+#' <!-- #Loading libraries -->
+
+suppressPackageStartupMessages({
+    library(conflicted) # An Alternative Conflict Resolution Strategy
+    library(readxl) # read in Excel files
+    library(readr) # read in csv files
+    library(MASS) # Functions and datasets to support Venables and Ripley, "Modern Applied Statistics with S" (4th edition, 2002).
+    library(dplyr) # A Grammar of Data Manipulation
+    library(tidyr) # Tidy Messy Data
+    library(broom) # Convert Statistical Objects into Tidy Tibbles
+    library(ggplot2) # grammar of graphics for visualization
+    library(knitr) # A General-Purpose Package for Dynamic Report Generation in R
+    library(RCurl) # General Network (HTTP/FTP/...) Client Interface for R
+    library(DT) # A Wrapper of the JavaScript Library 'DataTables'
+    library(modelr) # Modelling Functions that Work with the Pipe
+    library(purrr) # Functional Programming Tools - helps with mapping (i.e., loops)
+    library(pROC) #	Display and Analyze ROC Curves
+    library(data.table) # Fast aggregation of large data (e.g. 100GB in RAM)
+    library(VIM) # Visualization and Imputation of Missing Values
+    library(gridExtra) # Miscellaneous Functions for "Grid" Graphics
+    library(Metrics) # Evaluation Metrics for Machine Learning
+    library(randomForest) # Breiman and Cutler's Random Forests for Classification and Regression
+    library(e1071) # Misc Functions of the Department of Statistics, Probability Theory Group (Formerly: E1071), TU Wien
+    library(corrplot) # Visualization of a Correlation Matrix
+    library(DMwR2) # Functions and Data for the Second Edition of "Data Mining with R"
+    library(rsample) # General Resampling Infrastructure
+    library(skimr) # Compact and Flexible Summaries of Data
+    library(psych) # Procedures for Psychological, Psychometric, and Personality Research
+    library(tree) # Classification and Regression Trees
+    library(tidymodels) # Easily Install and Load the 'Tidymodels' Packages
+    library(janitor) # Simple Tools for Examining and Cleaning Dirty Data
+    library(GGally) # Extension to 'ggplot2'
+    library(tidyquant) # Tidy Quantitative Financial Analysis
+    library(doParallel) # Foreach Parallel Adaptor for the 'parallel' Package
+    library(Boruta) # Wrapper Algorithm for All Relevant Feature Selection
+    library(correlationfunnel) # Speed Up Exploratory Data Analysis (EDA) with the Correlation Funnel
+    library(naniar) # viewing and handling missing data
+    library(plotly) # Create interactive plots
+    library(themis) # Upsampling and Downsampling methods for tidymodels
+    library(questionr) # this will give you odds ratios
+    library(tidylog, warn.conflicts = FALSE)
+})
+
+for (f in getNamespaceExports("tidylog")) {
+    conflicted::conflict_prefer(f, "tidylog", quiet = TRUE)
+}
+
+
+conflict_prefer("tune", "tune")
+```
+
+Setting `conflict_prefer`.
+
+```{r}
+conflict_prefer("select", "dplyr")
+conflict_prefer("tune", "tune")
+conflict_prefer("chisq.test", "stats")
+conflict_prefer("filter", "dplyr")
+conflict_prefer("skewness", "PerformanceAnalytics")
+conflict_prefer("fit", "parsnip")
+conflict_prefer("rmse", "yardstick")
+conflict_prefer("map", "purrr")
+conflict_prefer("vip", "vip")
+```
+
+Load helper functions
+
+```{r}
+#From Matt Dancho DS4B 201
+#Helps us make pretty graphs
+
+
+plot_ggpairs <- function(data, color = NULL, density_alpha = 0.5) {
+    
+    color_expr <- enquo(color)
+    
+    if (rlang::quo_is_null(color_expr)) {
+        
+        g <- data %>%
+            ggpairs(lower = "blank") 
+        
+    } else {
+        
+        color_name <- quo_name(color_expr)
+        
+        g <- data %>%
+            ggpairs(mapping = aes_string(color = color_name), 
+                    lower = "blank", legend = 1,
+                    diag = list(continuous = wrap("densityDiag", 
+                                                  alpha = density_alpha))) +
+            theme(legend.position = "bottom")
+    }
+    
+    return(g)
+    
+}
+
+#From Matt Dancho DS4B 201
+plot_hist_facet <- function(data, fct_reorder = FALSE, fct_rev = FALSE, 
+                            bins = 10, fill = palette_light()[[3]], color = "white", ncol = 5, scale = "free") {
+    
+    data_factored <- data %>%
+        mutate_if(is.character, as.factor) %>%
+        mutate_if(is.factor, as.numeric) %>%
+        gather(key = key, value = value, factor_key = TRUE) 
+    
+    if (fct_reorder) {
+        data_factored <- data_factored %>%
+            mutate(key = as.character(key) %>% as.factor())
+    }
+    
+    if (fct_rev) {
+        data_factored <- data_factored %>%
+            mutate(key = fct_rev(key))
+    }
+    
+    g <- data_factored %>%
+        ggplot(aes(x = value, group = key)) +
+        geom_histogram(bins = bins, fill = fill, color = color) +
+        facet_wrap(~ key, ncol = ncol, scale = scale) + 
+        theme_tq()
+    
+    return(g)
+    
+}
+```
+
+
+###Dataset initialization
+
+
+Bring in the data. This is the IBM HR data with 1470 observations we used before.
+
+```{r}
+# library(rsample)
+# data("attrition")
+# names(attrition)
+# 
+# Data <- attrition
+stringsAsFactors = TRUE
+library(readxl)
+Data <- read_excel("C:/Advanced Analytics Project/00_Data/WA_Fn-UseC_-HR-Employee-Attrition.xlsx")
+colnames(Data)
+
+str(Data)
+
+Data <- as.data.frame(unclass(Data)) #Change all strings from Character to Factor
+#From: https://stackoverflow.com/questions/20637360/convert-all-data-frame-character-columns-to-factors
+
+#numbers stay same, only strings change
+
+str(Data)
+```
+
+```{r}
+Data <- Data %>% 
+    mutate(ID = row_number()) %>% #generating ID variables
+  select(ID, everything())
+```
+```{r}
+set.seed(2020) #splitting data into training and test datasets
+
+data_split <- initial_split(Data, prop = 0.75, strata = "Attrition")
+
+train_data <- training(data_split)
+
+test_data <- testing(data_split)
+
+cv_folds <-vfold_cv(train_data, v = 10) #folding data 10 ways
+```
+
+###Boruta
+
+
+```{r}
+# Run Boruta over training data for feature selection
+# From: https://www.analyticsvidhya.com/blog/2016/03/select-important-variables-boruta-package/
+
+set.seed(2023)
+
+library(Boruta)
+#only running boruta on training dataset, maybe kick some more stuff out after.
+boruta_df <- train_data %>%
+    select(-EmployeeNumber,
+           -ID) %>%
+    mutate_if(is.character, as.factor)
+
+boruta_train <- Boruta(Attrition~., data = boruta_df, doTrace = 2) # doTrace: It refers to verbosity level. 0 means no tracing. 1 means reporting attribute decision as soon as it is cleared. 2 means all of 1 plus additionally reporting each iteration. Default is 0.
+
+print(boruta_train)
+
+
+```
+
+### Visualize Boruta
+
+```{r}
+plot(boruta_train, xlab = "", xaxt = "n")
+
+lz <- lapply(1:ncol(boruta_train$ImpHistory), function(i)
+    boruta_train$ImpHistory[is.finite(boruta_train$ImpHistory[,i]),i])
+
+names(lz) <- colnames(boruta_train$ImpHistory)
+
+Labels <- sort(sapply(lz, median))
+
+axis(side = 1, las = 2, labels = names(Labels),
+     at = 1:ncol(boruta_train$ImpHistory), cex.axis = 0.7)
+```
+
+
+```{r}
+final_boruta <- TentativeRoughFix(boruta_train) #Now we will run TenativeRoughFix in order to make Boruta decide on any of the tentative attributes above.
+
+print(final_boruta)
+
+```
+
+
+```{r}
+# It's time for results now. Let's obtain the list of confirmed attributes
+
+cat(getSelectedAttributes(final_boruta, withTentative = F), sep = "\n")
+
+# Age
+# Department
+# EnvironmentSatisfaction
+# JobLevel
+# JobRole
+# JobSatisfaction
+# MaritalStatus
+# MonthlyIncome
+# OverTime
+# StockOptionLevel
+# TotalWorkingYears
+# WorkLifeBalance
+# YearsAtCompany
+# YearsInCurrentRole
+# YearsWithCurrManager
+```
+
+
+```{r}
+# We'll create a data frame of the final result derived from Boruta.
+
+boruta_df <- attStats(final_boruta)
+class(boruta_df)
+# [1] "data.frame"
+print(boruta_df)
+```
+
+
+### Create new data frame with variables found by Boruta
+
+```{r}
+Data <- Data %>%
+    select(
+ID,
+EmployeeNumber,
+Attrition,
+Age,
+Department,
+EnvironmentSatisfaction,
+JobLevel,
+JobRole,
+JobSatisfaction,
+MaritalStatus,
+MonthlyIncome,
+OverTime,
+StockOptionLevel,
+TotalWorkingYears,
+WorkLifeBalance,
+YearsAtCompany,
+YearsInCurrentRole,
+YearsWithCurrManager)
+```
+
+## Splitting the data again after removing features deemed unnecessary by Boruta
+
+```{r}
+set.seed(2020)
+data_split <- initial_split(Data, prop = 0.75, strata = "Attrition")
+
+train_data <- training(data_split)
+
+test_data <- testing(data_split)
+
+tabyl(train_data$Attrition)
+
+tabyl(test_data$Attrition)
+```
+
+## Rerun the Cross Validation V-Folds creation
+
+```{r}
+set.seed(2020)
+cv_folds <- vfold_cv(train_data, v = 10, strata = "Attrition") #recreating folds due to previous runs
+```
+
+
+# Rerun the recipe since features have been removed
+
+```{r}
+set.seed(2020) #setting seed here because I think step_upsample may need it.
+
+#Possible way to fix step_num2factor
+#From: https://stackoverflow.com/questions/61564259/step-num2factor-usage-tidymodel-recipe-package
+
+lasso_recipe <- recipe(Attrition ~ ., data = train_data) %>% 
+  update_role(ID, EmployeeNumber, new_role = "ID") %>%
+  step_mutate(JobLevel = factor(JobLevel)) %>% #step_num2factor doesn't seem to like having more than one variable, especially if they have a different number of factors. It will apply the given "Levels" to all variables listed even if that makes no sense...
+    step_mutate(StockOptionLevel = factor(StockOptionLevel)) %>% #so enter step_mutate. See link above.
+    step_YeoJohnson(#Need to break out step_YeoJohnson into each variable as opposed to a vector for some reason
+                    #YearsSinceLastPromotion, removed
+                    #PerformanceRating, removed
+                    YearsAtCompany,
+                    MonthlyIncome,
+                    TotalWorkingYears,
+                    #NumCompaniesWorked,removed
+                    #DistanceFromHome, removed
+                    YearsInCurrentRole,
+                    YearsWithCurrManager
+                    #PercentSalaryHike removed
+                    ) %>%
+    step_nzv(all_numeric()) %>% #it looks like step_nzv also takes care of step_zv so these are probably redundant.
+    step_zv(all_predictors()) %>%
+    step_normalize(all_numeric()) %>%
+    step_upsample(all_outcomes(), skip = TRUE) %>% #see here (https://recipes.tidymodels.org/articles/Skipping.html) We want to upsample on training data, but not on test data
+    # step_novel(all_predictors()) %>% #creates a specification of a recipe step that will assign a previously unseen factor level to a new value. #This is throwing an error downstream. Not dealing with this right now, just commenting out.
+    step_dummy(all_nominal(), -all_outcomes()) #This only seems to work if you remove the outcome variable. In this case "Attrition"
+  
+lasso_recipe
+```
+
+##Analysis
+
+```{r}
+lasso_spec <- 
+  logistic_reg(penalty = tune(), mixture = 1) %>% #creating function to create lasso regression using glmnet engine with tuned penalty
+  set_mode("classification") %>%                  #Adjusted to be log regression due to dichotomous var.
+  set_engine("glmnet") 
+
+lasso_workflow <- workflow() %>% #creating workflow using previously created recipe and specifications with above function
+  add_recipe(lasso_recipe)
+
+lasso_fit <- lasso_workflow %>%
+  add_model(lasso_spec) %>%
+  fit(data = train_data)
+
+#lasso_fit %>%
+#  pull_workflow_fit() %>%
+#  tidy()
+```
+
+
+```{r}
+penalty_grid <- grid_regular(penalty(range = c(-2, 2)), levels = 50) #generating penalty grid, 50 levels with range of -2 to 2
+```
+
+```{r}
+tune_res <- tune_grid( 
+  lasso_workflow %>% add_model(lasso_spec),
+  resamples = cv_folds, #tuning grid
+  grid = penalty_grid
+)
+tune_res%>%
+  collect_metrics
+autoplot(tune_res) #plotting grid
+```
+
+```{r}
+best_penalty_auc <- tune_res %>%
+  select_best(metric = "roc_auc") #utilizing roc_auc since we're dealing with a log regression 
+
+best_penalty_auc #best auc specs
+```
+
+```{r}
+final_lasso <- finalize_workflow(
+  lasso_workflow %>% add_model(lasso_spec),
+  best_penalty_auc
+)
+
+#lasso_final <- finalize_workflow(lasso_workflow, best_penalty_auc)
+#lasso_final_fit <- fit(lasso_final, data = train_data) #using training dataset
+```
+
+
+```{r}
+last_fit(
+  final_lasso,
+  data_split
+) %>%
+  collect_metrics() #collecting metrics from model
+```
+
+
+```{r}
+final_lasso$fit
+```
+
+
+```{r}
+#tidy(logit_fit) %>%
+#  arrange(desc(abs(statistic))) it's not me, it's you
+```
+
+```{r}
+set.seed(2020)
+#Fit with formula and model
+fit_resamples(
+  final_lasso,
+  model = lasso_spec,          
+  resamples = cv_folds
+)
+```
+
+```{r}
+conflicts_prefer(yardstick::accuracy)
+conflicts_prefer(yardstick::precision)
+
+class_metric <- metric_set(accuracy, #how often its right
+                           f_meas, 
+                           j_index, 
+                           kap, 
+                           precision, 
+                           sensitivity, 
+                           specificity, 
+                           roc_auc, 
+                           mcc, 
+                           pr_auc)
+```
+
+```{r}
+set.seed(2020) 
+fit_resamples(final_lasso, 
+              lasso_spec, 
+              metrics = class_metric,
+              resamples = cv_folds) %>%
+  collect_metrics()
+```
+
+```{r}
+lasso_last_fit <- final_lasso %>%
+  # fit on the training set and evaluate on the test set
+  last_fit(data_split)
+```
+
+```{r}
+lasso_last_fit
+```
+
+```{r}
+lasso_test_performance <- lasso_last_fit %>% collect_metrics()
+lasso_test_performance #numbers aren't satisfactory
+```
+
+```{r}
+lasso_test_predictions <- lasso_last_fit %>% collect_predictions
+lasso_test_predictions #prelude to confusion matrix
+```
+
+```{r}
+lasso_test_predictions %>%
+  roc_curve(Attrition, .pred_No) %>%
+  ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+  geom_line(size = 1.5, color = "midnightblue") +
+  geom_abline(
+    lty = 2, alpha = 0.5,
+    color = "gray50",
+    size = 1.2 #creating roc auc curve
+  ) 
+```
+
+```{r}
+lasso_test_predictions %>%
+  pr_curve(Attrition, .pred_No) %>%
+  ggplot(aes(x = recall, y = precision)) +
+  geom_path() + 
+  coord_equal() +
+  theme_bw() #creating pr curve
+```
+
+```{r}
+# generate a confusion matrix
+conflict_prefer("spec", "yardstick")
+
+
+lasso_test_predictions %>%
+  conf_mat(truth = Attrition, estimate = .pred_class)
+#results are... not great
+```
+
+```{r}
+lasso_test_predictions %>%
+  conf_mat(truth = Attrition, estimate = .pred_class) %>% #again, numbers aren't great here either.
+  summary()
+```
+
+##Comparing above to random forest methods
+
+```{r}
+library(lubridate)
+
+rf_spec <- rand_forest(
+  mtry = tune(), #we don't know what to put here yet, so we use `tune` as a filler
+  trees = 100, #1000 #going low here for times sake. You usually want to start with at least 1000
+  min_n = tune() #we don't know what to put here yet, so we use `tune` as a filler
+) %>%
+  set_mode("classification") %>%
+  set_engine("ranger", seed = 2023) # setting a seed within ranger. NOTE: THIS WAS A GHOST IN THE MACHINE FOR QUITE A WHILE UNTIL I FIGURED OUT THAT THE SEED NEEDED TO BE SET WITHIN THE ENGINE!!!
+```
+
+
+```{r}
+rf_tune_wf <- workflow() %>%
+  add_recipe(lasso_recipe) %>% #using lasso_recipe from above for new model/workflow
+  add_model(rf_spec) #utilizing new engine
+```
+
+# Train hyperparameters
+
+```{r}
+
+conflict_prefer("tune", "tune")
+
+doParallel::registerDoParallel()
+
+set.seed(345) #new seed
+rf_tune_res <- tune_grid(
+  rf_tune_wf, #calling new workflow
+  resamples = cv_folds,
+  grid = 20, #telling mtry to try with 20 values, same with min_n
+  metrics = class_metric
+)
+
+rf_tune_res
+```
+
+```{r, fig.width=8, fig.height=3.5}
+rf_tune_res %>%                   #visualizing the auc values based off the generated environments
+    collect_metrics() %>%
+    filter(.metric == "roc_auc") %>% #note roc auc
+    select(mean, min_n, mtry) %>%
+    pivot_longer(min_n:mtry,
+                 values_to = "value",
+                 names_to = "parameter") %>%
+    ggplot(aes(value, mean, color = parameter)) +
+    geom_point(show.legend = FALSE) +
+    facet_wrap(~ parameter, scales = "free_x") +
+    labs(x = NULL, y = "AUC") #lower values of mtry and higher valyes if min_n looking like they have higher metrics
+```
+
+```{r, fig.width=8, fig.height=3.5}
+rf_tune_res %>%
+    collect_metrics() %>%
+    filter(.metric == "pr_auc") %>% #note pr auc
+    select(mean, min_n, mtry) %>%
+    pivot_longer(min_n:mtry,
+                 values_to = "value",
+                 names_to = "parameter") %>%
+    ggplot(aes(value, mean, color = parameter)) +
+    geom_point(show.legend = FALSE) +
+    facet_wrap(~ parameter, scales = "free_x") +
+    labs(x = NULL, y = "AUC") #similar findings to roc auc analysis
+```
+
+```{r}
+rf_grid <- grid_regular(
+    mtry(range = c(5, 30)), #`mtry`: The number of predictors that will be randomly sampled at each split when creating the tree models.
+    min_n(range = c(5, 25)), #`min_n`: The minimum number of data points in a node that are required for the node to be split further.
+    levels = 10
+)
+
+rf_grid
+```
+
+```{r}
+set.seed(456) #tuning once more with rf_grid vs arbitrary number
+
+regular_res <- tune_grid(
+    rf_tune_wf,
+    resamples = cv_folds,
+    metrics = class_metric,
+    grid = rf_grid
+)
+
+regular_res
+```
+
+```{r}
+regular_res %>% #examining results from new analysis
+    collect_metrics() %>%
+    filter(.metric == "pr_auc") %>% #note pr_auc
+    mutate(min_n = factor(min_n)) %>%
+    ggplot(aes(mtry, mean, color = min_n)) +
+    geom_line(alpha = 0.5, size = 1.5) +
+    geom_point() +
+    labs(y = "AUC") #min n 18 performed the best at mtry 5
+```
+
+## Choosing the best model
+
+```{r}
+best_auc <- select_best(regular_res, metric = "pr_auc") #using above results to reevaluate tuned value
+
+final_rf <- finalize_model(
+    rf_spec,
+    best_auc
+)
+
+final_rf
+```
+
+```{r}
+
+rf_final_wf <- workflow() %>% #evaluating metrics with new model
+    add_recipe(lasso_recipe) %>%
+    add_model(final_rf)
+
+rf_final_res <- rf_final_wf %>%
+    last_fit(data_split,
+             metrics = class_metric)
+
+rf_final_res %>%
+    collect_metrics() #metrics improved from .77 to ,82 for accuracy
+```
+
+
+```{r}
+rf_test_predictions <- rf_final_res %>% collect_predictions() #generating test predictions
+rf_test_predictions
+```
+
+
+```{r}
+rf_test_predictions %>% #plotting ROC curve
+  roc_curve(Attrition, .pred_No) %>%
+  ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+  geom_line(size = 1.5, color = "midnightblue") +
+  geom_abline(
+    lty = 2, alpha = 0.5,
+    color = "gray50",
+    size = 1.2
+  ) 
+```
+
+
+```{r}
+rf_test_predictions %>% #plotting PR curve
+  pr_curve(Attrition, .pred_No) %>%
+  ggplot(aes(x = recall, y = precision)) +
+  geom_path() + 
+  coord_equal() +
+  theme_bw()
+```
+
+Since this is just a normal data frame/tibble object, we can generate summaries and plots such as a confusion matrix just like we did for our logistic regression.
+```{r}
+# generating a confusion matrix
+conflict_prefer("spec", "yardstick")
+
+
+rf_test_predictions %>%
+  conf_mat(truth = Attrition, estimate = .pred_class)
+#values look for predicting attrition itself don't look amazing
+```
+
+```{r}
+rf_test_predictions %>%
+  conf_mat(truth = Attrition, estimate = .pred_class) %>%
+  summary() #model may be more accurate but is not capturing/predicting the variable of interest
+```
+
+Ultimately the original model may be preferable compared to the random-forest method model.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

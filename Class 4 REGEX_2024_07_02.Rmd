@@ -1,0 +1,422 @@
+---
+title: "Class 4 REGEX"
+output: html_notebook
+---
+
+This is a tutorial on `gdscrapR` which is a web scraper for Glassdoor Reviews.
+
+```{r}
+#Tutorial on gdscrapeR
+#From: https://github.com/mguideng/gdscrapeR
+#June 2019
+
+
+
+############################################################################################
+############################################################################################
+# Clear workspace 
+rm(list = ls())
+############################################################################################
+
+#######################################################################################################
+#######################################################################################################
+##################################LOADING PACKAGES#####################################################
+
+################################################################################
+#Do tryCatch here
+
+tryCatch(require(pacman),finally=utils:::install.packages(pkgs='pacman',repos='http://cran.r-project.org'));
+require(pacman)
+
+##if the above doesn't work, use this code##
+##tryCatch
+#detach("package:pacman", unload = TRUE)
+#install.packages("pacman", dependencies = TRUE)
+# ## install.packages("pacman")
+pacman::p_load(openxlsx, 
+               tidyverse, 
+               devtools,
+               conflicted,
+               lubridate,
+               sentimentr)
+
+#Loading libraries
+library(openxlsx)
+library(tidyverse)
+library(devtools)
+library(conflicted)
+library(lubridate)
+library(sentimentr)
+
+
+# devtools::install_github("mguideng/gdscrapeR")
+
+# library(gdscrapeR)
+```
+
+```{r}
+conflict_prefer("filter", "dplyr")
+```
+
+In the tutorial, they use SpaceX, but we will use Delta Air Lines to keep it closer to home. On second thought, it looks like they may have blocked my IP address. So we will use the Honeywell data from [here](https://www.kaggle.com/dhirajnimbalkar/topicmodellinghoneywellglassdoorreviews/downloads/topicmodellinghoneywellglassdoorreviews.zip/2). Thanks Kaggle!
+
+```{r, eval = FALSE}
+#######################################################################################################
+#######################################################################################################
+##################################LOADING DATA#########################################################----
+
+# USAGE
+# Example
+# The URL to scrape the awesome SpaceX company will be: www.glassdoor.com/Reviews/SpaceX-Reviews-E40371.htm.
+# The URL to scrape Delta will be: https://www.glassdoor.com/Reviews/Delta-Air-Lines-Reviews-E197.htm
+
+# The URL to scrape Honeywell will be: https://www.glassdoor.com/Reviews/Honeywell-Reviews-E28.htm
+
+# Function
+# Pass the company number through the get_reviews function. The company number is a string representing a company's unique ID number. Identified by navigating to a company's Glassdoor reviews web page and reviewing the URL for characters between "Reviews-" and ".htm" (usually starts with an "E" and followed by digits).
+
+# Create data frame of: Date, Summary, Rating, Title, Pros, Cons, Helpful
+#df <- get_reviews(companyNum = "E40371")
+df <- get_reviews(companyNum = "E197")
+#df <- get_reviews(companyNum = "E28")
+# This will scrape the following variables:
+# 
+# Date - of when review was posted
+# Summary - e.g., "Great People"
+# Rating - star rating between 1.0 and 5.0
+# Title - e.g., "Current Employee - Manager in Hawthorne, CA"
+# Pros - upsides of the workplace
+# Cons - downsides of the workplace
+# Helpful - count marked as being helpful, if any
+# (and other info related to the source link)
+
+#### REGEX ####
+# Package
+library(stringr)    # pattern matching functions
+
+# Add: PriKey (uniquely identify rows 1 to N, sorted from first to last review by date)
+df$rev.pk <- as.numeric(rownames(df))
+
+# Extract: Year, Status, Position, Location 
+df$rev.year <- as.numeric(sub(".*, ","", df$rev.date))
+
+df$rev.stat <- str_match(df$rev.title, ".+?(?= Employee -)")
+
+df$rev.pos <- str_replace_all(df$rev.title, ".* Employee - |\\sin .*|\\s$", "")
+
+df$rev.loc <- sub(".*\\sin ", "", df$rev.title)
+df$rev.loc <- ifelse(df$rev.loc %in% 
+                       (grep("Former Employee|Current Employee|^+$", df$rev.loc, value = T)), 
+                     "Not Given", df$rev.loc)
+
+# Clean: Pros, Cons, Helpful
+df$rev.pros <- gsub("&amp;", "&", df$rev.pros)
+
+df$rev.cons <- gsub("&amp;", "&", df$rev.cons)
+
+df$rev.helpf <- as.numeric(gsub("\\D", "", df$rev.helpf))
+
+DAL <- df
+
+#### EXPORT ####
+# write.csv(df, "df-results.csv", row.names = F)
+
+```
+
+We will load it manually
+
+```{r}
+library(readr)
+Data <- read_csv("C:/UGA IOMP Class/UGA IOMP 2023/00_Data/glassdoortest1.csv")
+```
+
+Let's get our column names.
+
+```{r}
+cat(colnames(Data), sep = ",\n")
+```
+
+
+```{r}
+colnames(Data)
+```
+
+Change X1 to ID
+
+```{r}
+Data <- Data %>%
+    rename(ID = "...1")
+```
+
+We will just look at the Pros for now.
+
+Notice we are creating a new df called Comments_df so that we don't touch the original Data df. This is helpful because we will be slicing, dicing, scattering, etc. to the df in order to split out the text in various ways.
+
+
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#####################BRUTE FORCE TOPIC CLASSIFICATION USING REGEX###################################### -->
+
+Comments_df <- Data %>%
+    select(c(ID, pros)) %>%
+    filter(!is.na(pros)) %>%
+    rename('comments' = 'pros')
+
+```
+
+```{r}
+Comments_df <- Comments_df %>%
+  as_tibble() %>%
+  mutate(comments = str_replace_all(comments, "\uFFFD", "")) #This may have fixed our problem, it may have not...be careful
+
+#From: https://stackoverflow.com/questions/42626243/r-remove-unicode-replacement-character-from-a-string
+```
+
+
+Convert everything to lowercase for simplicity.
+
+```{r}
+#Converting to lower case
+
+Comments_df <- Comments_df %>%
+    mutate(comments = tolower(comments))
+
+```
+
+Remove all line breaks.
+
+```{r}
+#Remove all line breaks
+
+#From: https://stackoverflow.com/questions/21781014/remove-all-line-breaks-enter-symbols-from-the-string-using-r
+
+Comments_df$comments <- gsub("[\r\n]", "", Comments_df$comments)
+
+Comments_df <- Comments_df %>%
+    select(ID, comments) %>%
+    na.omit()
+
+```
+
+Now let's create our first known topic. We'll go with benefits for now.
+
+Common ones you may want to look at are:
+
+* Benefits
+* Career advancement
+* Compensation
+* Direct Manager
+* General Management 
+* Safety
+
+What others can you think of?
+
+You can also do subcategories such as:
+
+* Benefits-Health
+* Benefits-Paid Time Off
+
+What others can you think of?
+
+Could you build out your own classifer with ~20 or so meta categories and subcategories as needed?
+
+```{r}
+#Creating a beginning using `now` from lubridate.
+#This is helpful when you get to several categories using a brute force search so that you (and others if they run you script) know about how long it will take to run.
+
+#After we run everything, we will create `end_time <- now()` along with `print(difftime(end_time, start_time))` as the last line of code after everything we are concerned about has run.
+
+start_time <- now()
+```
+
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### BENEFITS ######################################################### -->
+
+#From: https://stackoverflow.com/questions/26319567/use-grepl-to-search-either-of-multiple-substrings-in-a-text
+#From: https://stackoverflow.com/questions/5823503/pattern-matching-using-a-wildcard
+#From: https://stackoverflow.com/questions/31421077/r-wildcard-matching-for-certain-number-of-terms
+#From: https://www.regular-expressions.info/rlanguage.html
+
+benefits <- c('\\brx\\b', #this will only get the word "rx" and nothing else
+              '^.*medic.*$', #this will get medic, medicine, medical, etc.
+              '(?=.*bene)(?=.*(?:health))', #This will get benefits, beneficial, benefit, etc. but only if it occurs with health, healthy, healthcare, in the same comment
+              '(?=.*coverage)(?=.*(?:medic|deduct|prescrip|insur|drug|health|dependent))', #This will get coverage, overages, etc. as long as some form of medic, deduct, prescription, etc. occur in the same comment
+                    '\\b(?:health\\W+(?:\\w+\\W+){0,1}?care)\\b', #this will only get health care or healthcare (e.g. health and care must occur within one word)
+                    '\\bhealthcare\\b', #this will only get the word "healthcare". If there is a space between them, it won't pick it up.
+              '\\bhealth\\s?care\\b', #this will get the word "healthcare" or "health care" as the \\s? indicates zero or one whitespace character.
+                    '\\b(?:medical\\W+(?:\\w+\\W+){0,3}?benefits|benefits\\W+(?:\\w+\\W+){0,3}?medical)\\b', #This will get medical benefits or benefits medical as long as they occur within 3 word of each other.
+              '^.*vacation.*$',
+              '\\bpto\\b'
+                     )
+
+ 
+
+ 
+
+benefits_pattern <- paste(benefits, collapse = "|") #This puts everything from what you put into `benefits` together into a pattern to search for.
+
+benefits_comments <- as.data.frame(Comments_df[grep(benefits_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # This takes the pattern you just created and searches over the entire column of "comments" in the Comments_df
+
+TEST <- Comments_df %>%
+    mutate(benefits = ifelse(comments %in% benefits_comments$comments, "Y",
+                             "N")) #This creates a new object, TEST, from Comments_df and if any of the comments in the "comments" column match (%in%) the comments exactly, they get a "Y". If not they get a "N" in the new "benefits" column
+```
+
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### BENEFITS_INSURANCE ############################################### -->
+
+#From: https://stackoverflow.com/questions/26319567/use-grepl-to-search-either-of-multiple-substrings-in-a-text
+#From: https://stackoverflow.com/questions/5823503/pattern-matching-using-a-wildcard
+#From: https://stackoverflow.com/questions/31421077/r-wildcard-matching-for-certain-number-of-terms
+#From: https://www.regular-expressions.info/rlanguage.html
+
+benefits_insurance <- c('(?=.*insur)(?=.*(?:medic|dental|life|vision|supplement|disabl))',
+                        '\\b(?:insurance\\W+(?:\\w+\\W+){0,1}?premium)\\b',
+                        '\\binsurance\\b'
+                        )
+
+ 
+
+ 
+
+benefits_insurance_pattern <- paste(benefits_insurance, collapse = "|") #This puts everything from what you put into `benefits` together into a pattern to search for.
+
+benefits_insurance_comments <- as.data.frame(Comments_df[grep(benefits_insurance_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # This takes the pattern you just created and searches over the entire column of "comments" in the Comments_df
+
+TEST <- TEST %>%
+    mutate(benefits_insurance = ifelse(comments %in% benefits_insurance_comments$comments, "Y",
+                             "N")) #This creates a new object, TEST, from Comments_df and if any of the comments in the "comments" column match (%in%) the comments exactly, they get a "Y". If not they get a "N" in the new "benefits" column
+```
+
+
+Ok, now let's do compensation.
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--################################# COMPENSATION ######################################################## -->
+
+#From: https://stackoverflow.com/questions/26319567/use-grepl-to-search-either-of-multiple-substrings-in-a-text
+#From: https://stackoverflow.com/questions/5823503/pattern-matching-using-a-wildcard
+#From: https://stackoverflow.com/questions/31421077/r-wildcard-matching-for-certain-number-of-terms
+#From: https://www.regular-expressions.info/rlanguage.html
+
+compensation <- c('\\bsalary\\b', 
+              '^.*compen.*$',
+              '\\bpay\\b',
+              '^.*incent.*$',
+              '^.*rate.*$',
+              '^.*money.*$'
+                     )
+
+#What else should we add?
+ 
+
+compensation_pattern <- paste(compensation, collapse = "|") #This puts everything from what you put into `compensation` together into a pattern to search for.
+
+compensation_comments <- as.data.frame(Comments_df[grep(compensation_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # This takes the pattern you just created and search over the entire column of "comments" in the Comments_df
+
+TEST <- TEST %>%
+    mutate(compensation = ifelse(comments %in% compensation_comments$comments, "Y",
+                             "N")) #This modifies the existing object, TEST, from TEST we created before and if any of the comments in the "comments" column match (%in%) the comments exactly, they get a "Y". If not they get a "N" in the new "compensation" column
+```
+
+If you want to roll up sub categories into a meta-category you can do something like this.
+
+```{r, eval = FALSE}
+TEST <- TEST %>%
+    mutate(Category_Overall = ifelse(subcat_1 == "Y" | subcat_2 == "Y" | subcat_3 == "Y", "Y", "N"))
+
+```
+
+If you want to do an Other category, you could do something like this.
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--################################ OTHER ################################################################ -->
+
+#From: https://stackoverflow.com/questions/32514453/ifelse-and-in-applied-to-rows-of-a-dataframe-in-r
+
+TEST <- TEST %>%
+    mutate(Other = apply(TEST, 1, function(y){ ifelse("Y" %in% y, "N", "Y")}))
+
+end_time <- now()
+
+print(difftime(end_time, start_time))
+```
+
+
+
+Once you are done you can write to Excel!
+
+Let's go ahead and make it fancy while we are here.
+
+```{r}
+##################################
+# Comment Report
+##################################
+
+#Creating df for header
+
+INTRO <- c("Company Name",
+
+         "Data Source: Glassdoor",
+
+         "Data As Of: Q3 2024",
+
+         "Prepared on: 7/11/2024",
+
+         "Prepared by: YOUR NAME HERE")
+
+wb <- openxlsx::createWorkbook() #Create a work book
+
+
+#Comment Report
+
+addWorksheet(wb, "Comment Report") #name the worksheet in Excel
+
+writeData(wb, "Comment Report", INTRO) #Write your INTRO
+
+
+#Create style
+
+style1 <- createStyle(fontColour = "#000080", textDecoration = "Bold") #Choose your custom font color (https://www.rgbtohex.net/) and make it bold. Call it style1
+
+ 
+
+addStyle(wb, style = style1, rows= 1:5, cols = 1, sheet = "Comment Report") #add this style to your worksheet. Tell it which rows and columns
+
+writeData(wb, "Comment Report", TEST, startRow = 8) #put your DF (in this case TEST) into the sheet under your writing (row 8)
+
+hs1 <- createStyle(textDecoration = "Bold") #create a new style for heading
+
+addStyle(wb, style = hs1, rows = 8, cols = 1:nrow(TEST), sheet = "Comment Report") #Tell it where to go. We'll do 50 columns in this case so it can grow if needed
+
+#Freeze Panes
+
+#Also check here: https://stackoverflow.com/questions/37677326/applying-style-to-all-sheets-of-a-workbook-using-openxlsx-package-in-r
+
+freezePane(wb, "Comment Report", firstActiveRow = 9) #Freeze those panes. You know you want to. Tell it where to start.
+
+#Add filter
+
+addFilter(wb, "Comment Report", row = 8, cols = 1:nrow(TEST)) #Add your filter as well. If you're trying to impress, you might as well go all in :)
+
+#Now we'll do a fancy save by customizing the file name using paste0 and system time. We'll also assume this was for the previous month. You'll also need to make this path the one you want on your computer. 
+
+
+saveWorkbook(wb, paste0("C:/UGA IOMP Class/UGA IOMP 2023/Class 4/Comment_Report_", format(floor_date(Sys.Date()-months(1), "month"), "%B_%Y") , ".xlsx"), overwrite = TRUE)
+```
+

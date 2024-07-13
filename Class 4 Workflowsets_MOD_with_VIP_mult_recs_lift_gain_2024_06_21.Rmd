@@ -1,0 +1,1626 @@
+---
+title: "Class 4 - Workflowsets"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r, echo = FALSE, include= FALSE, warning = FALSE, message = FALSE}
+#' <!-- ####################################################################################################### -->
+#' <!-- ####################################################################################################### -->
+#' <!-- ##################################LOADING PACKAGES##################################################### -->
+
+tryCatch(require(pacman),finally=utils:::install.packages(pkgs='pacman',repos='http://cran.r-project.org'));
+require(pacman)
+
+#' <!-- ##if the above doesn't work, use this code## -->
+#' <!-- ##tryCatch -->
+#' <!-- #detach("package:pacman", unload = TRUE) -->
+#' <!-- #install.packages("pacman", dependencies = TRUE) -->
+#' <!-- # ## install.packages("pacman") -->
+
+pacman::p_load(digest,
+               readxl,
+               readr,
+               dplyr,
+               tidyr,
+               ggplot2,
+               knitr,
+               MASS,
+               RCurl,
+               DT,
+               modelr,
+               broom,
+               purrr,
+               pROC,
+               data.table,
+               VIM,
+               gridExtra,
+               Metrics,
+               randomForest,
+               e1071,
+               corrplot,
+               DMwR2,
+               rsample,
+               skimr,
+               psych,
+               conflicted,
+               tree,
+               tidymodels,
+               janitor,
+               GGally,
+               tidyquant,
+               doParallel,
+               Boruta,
+               correlationfunnel,
+               naniar,
+               plotly,
+               themis,
+               questionr,
+               rules,
+               baguette,
+               finetune,
+               stringr,
+               probably,
+               glmnet,
+               tidylog
+)
+
+# Loading from GitHub
+# pacman::p_load_current_gh("agstn/dataxray")
+```
+
+```{r, echo = FALSE, include= FALSE, warning = FALSE, message = FALSE}
+
+#' <!-- #Loading libraries -->
+
+suppressPackageStartupMessages({
+    library(conflicted) # An Alternative Conflict Resolution Strategy
+    library(readxl) # read in Excel files
+    library(readr) # read in csv files
+    library(MASS) # Functions and datasets to support Venables and Ripley, "Modern Applied Statistics with S" (4th edition, 2002).
+    library(dplyr) # A Grammar of Data Manipulation
+    library(tidyr) # Tidy Messy Data
+    library(broom) # Convert Statistical Objects into Tidy Tibbles
+    library(ggplot2) # grammar of graphics for visualization
+    library(knitr) # A General-Purpose Package for Dynamic Report Generation in R
+    library(RCurl) # General Network (HTTP/FTP/...) Client Interface for R
+    library(DT) # A Wrapper of the JavaScript Library 'DataTables'
+    library(modelr) # Modelling Functions that Work with the Pipe
+    library(purrr) # Functional Programming Tools - helps with mapping (i.e., loops)
+    library(pROC) #	Display and Analyze ROC Curves
+    library(data.table) # Fast aggregation of large data (e.g. 100GB in RAM)
+    library(VIM) # Visualization and Imputation of Missing Values
+    library(gridExtra) # Miscellaneous Functions for "Grid" Graphics
+    library(Metrics) # Evaluation Metrics for Machine Learning
+    library(randomForest) # Breiman and Cutler's Random Forests for Classification and Regression
+    library(e1071) # Misc Functions of the Department of Statistics, Probability Theory Group (Formerly: E1071), TU Wien
+    library(corrplot) # Visualization of a Correlation Matrix
+    library(DMwR2) # Functions and Data for the Second Edition of "Data Mining with R"
+    library(rsample) # General Resampling Infrastructure
+    library(skimr) # Compact and Flexible Summaries of Data
+    library(psych) # Procedures for Psychological, Psychometric, and Personality Research
+    library(tree) # Classification and Regression Trees
+    library(tidymodels) # Easily Install and Load the 'Tidymodels' Packages
+    library(janitor) # Simple Tools for Examining and Cleaning Dirty Data
+    library(GGally) # Extension to 'ggplot2'
+    library(tidyquant) # Tidy Quantitative Financial Analysis
+    library(doParallel) # Foreach Parallel Adaptor for the 'parallel' Package
+    library(Boruta) # Wrapper Algorithm for All Relevant Feature Selection
+    library(correlationfunnel) # Speed Up Exploratory Data Analysis (EDA) with the Correlation Funnel
+    library(naniar) # viewing and handling missing data
+    # library(dataxray) # An interactive table interface for data summaries
+    library(plotly) # Create interactive plots
+    library(themis) # Upsampling and Downsampling methods for tidymodels
+    library(questionr) # this will give you odds ratios
+    library(rules) # Bindings for additional models for use with the 'parsnip' package
+    library(baguette) # Efficient Model Functions for Bagging
+    library(finetune) # The ability to tune models is important. 'finetune' enhances the 'tune' package by providing more specialized methods for finding reasonable values of model tuning
+    library(stringr) # helps with manipulating strings
+    library(probably) # threshold manipulation for tidymodels
+    library(glmnet) # generalized linear model with LASSO, Ridge, and Elasticnet
+    library(tidylog, warn.conflicts = FALSE)
+})
+
+for (f in getNamespaceExports("tidylog")) {
+    conflicted::conflict_prefer(f, "tidylog", quiet = TRUE)
+}
+
+
+conflict_prefer("tune", "tune")
+```
+
+
+
+Set your `conflict_prefer`.
+
+```{r}
+conflict_prefer("select", "dplyr")
+conflict_prefer("tune", "tune")
+conflict_prefer("chisq.test", "stats")
+conflict_prefer("filter", "dplyr")
+conflict_prefer("skewness", "PerformanceAnalytics")
+conflict_prefer("fit", "parsnip")
+conflict_prefer("rmse", "yardstick")
+conflict_prefer("vi", "vip")
+conflicts_prefer(yardstick::sensitivity)
+conflicts_prefer(yardstick::specificity)
+conflicts_prefer(yardstick::accuracy)
+conflicts_prefer(yardstick::precision)
+```
+
+Load helper functions
+
+```{r}
+#From Matt Dancho DS4B 201
+
+plot_ggpairs <- function(data, color = NULL, density_alpha = 0.5) {
+    
+    color_expr <- enquo(color)
+    
+    if (rlang::quo_is_null(color_expr)) {
+        
+        g <- data %>%
+            ggpairs(lower = "blank") 
+        
+    } else {
+        
+        color_name <- quo_name(color_expr)
+        
+        g <- data %>%
+            ggpairs(mapping = aes_string(color = color_name), 
+                    lower = "blank", legend = 1,
+                    diag = list(continuous = wrap("densityDiag", 
+                                                  alpha = density_alpha))) +
+            theme(legend.position = "bottom")
+    }
+    
+    return(g)
+    
+}
+
+#From Matt Dancho DS4B 201
+plot_hist_facet <- function(data, fct_reorder = FALSE, fct_rev = FALSE, 
+                            bins = 10, fill = palette_light()[[3]], color = "white", ncol = 5, scale = "free") {
+    
+    data_factored <- data %>%
+        mutate_if(is.character, as.factor) %>%
+        mutate_if(is.factor, as.numeric) %>%
+        gather(key = key, value = value, factor_key = TRUE) 
+    
+    if (fct_reorder) {
+        data_factored <- data_factored %>%
+            mutate(key = as.character(key) %>% as.factor())
+    }
+    
+    if (fct_rev) {
+        data_factored <- data_factored %>%
+            mutate(key = fct_rev(key))
+    }
+    
+    g <- data_factored %>%
+        ggplot(aes(x = value, group = key)) +
+        geom_histogram(bins = bins, fill = fill, color = color) +
+        facet_wrap(~ key, ncol = ncol, scale = scale) + 
+        theme_tq()
+    
+    return(g)
+    
+}
+```
+
+
+# Reload the unaltered Data inorder to see if we can preprocess with the `recipes` package
+
+```{r}
+Data <- read_excel("C:/UGA IOMP Class/UGA IOMP 2023/00_Data/WA_Fn-UseC_-HR-Employee-Attrition.xlsx")
+```
+
+We will also add an ID to help us keep track of individuals if necessary.
+
+
+```{r}
+Data <- Data %>%
+  mutate(ID = row_number()) %>%
+  select(ID, everything())
+```
+
+And now, we'll change `Attrition` into a factor.
+
+```{r}
+Data <- Data %>%
+  mutate(Attrition = as.factor(Attrition))
+```
+
+
+Take only the important variables as determined by Boruta in Class 3.
+
+
+```{r}
+Data <- Data %>%
+    select(ID,
+           EmployeeNumber,
+           Attrition,
+           Age,
+           BusinessTravel,
+           Department,
+           EnvironmentSatisfaction,
+           JobInvolvement,
+           JobLevel,
+           JobRole,
+           JobSatisfaction,
+           MaritalStatus,
+           MonthlyIncome,
+           NumCompaniesWorked,
+           OverTime,
+           StockOptionLevel,
+           TotalWorkingYears,
+           YearsAtCompany,
+           YearsInCurrentRole,
+           YearsSinceLastPromotion,
+           YearsWithCurrManager)
+```
+
+
+Let's go ahead and run it again incorporating the `strata` argument to see how they differ, if at all.
+
+```{r}
+set.seed(2020)
+data_split <- initial_split(Data, prop = 0.75, strata = "Attrition")
+
+train_data <- training(data_split)
+
+test_data <- testing(data_split)
+
+tabyl(train_data$Attrition)
+
+tabyl(test_data$Attrition)
+```
+
+
+## Cross Validation V-Folds creation
+
+Now to go ahead and create our splits to use in modeling later.
+
+```{r}
+set.seed(2020)
+cv_folds <- vfold_cv(train_data, v = 10, strata = "Attrition") #We'll need to remember this later.
+```
+
+
+## Create recipe and roles
+
+Let's initiate a new recipe:
+
+
+The above way of doing a final recipe used to work. It no longer does...
+
+Update: The reason it no longer works is the that `workflows` now takes care of all of this. Instead of having to use `prep`, `bake`, and `juice` like we used to with recipes, `workflows` just does it! 
+
+Below is the way it is currently working.
+
+```{r}
+# In this recipe we are not taking care of the data imbalance
+
+no_sample_rec <- recipe(Attrition ~ ., data = train_data) %>% 
+  update_role(ID, EmployeeNumber, new_role = "ID") %>%
+  step_mutate(JobLevel = factor(JobLevel)) %>% #step_num2factor doesn't seem to like having more than one variable, especially if they have a different number of factors. It will apply the given "Levels" to all variables listed even if that makes no sense...
+    step_mutate(StockOptionLevel = factor(StockOptionLevel)) %>% #so enter step_mutate. See link above.
+    step_YeoJohnson(
+                    YearsSinceLastPromotion, #Need to break out step_YeoJohnson into each variable as opposed to a vector for some reason
+                    # PerformanceRating, # removed
+                    YearsAtCompany,
+                    MonthlyIncome,
+                    TotalWorkingYears,
+                    NumCompaniesWorked,
+                    # DistanceFromHome, # removed
+                    YearsInCurrentRole,
+                    YearsWithCurrManager
+                    # PercentSalaryHike # removed
+                    ) %>%
+    step_normalize(all_numeric()) %>%
+    step_nzv(all_predictors()) %>% #it looks like step_nzv also takes care of step_zv so these are probably redundant.
+    step_zv(all_predictors()) %>%
+    step_dummy(all_nominal_predictors())
+
+
+no_sample_rec
+```
+
+```{r, eval = FALSE}
+set.seed(2020) #setting seed here because I think step_upsample may need it.
+
+#Possible way to fix step_num2factor
+#From: https://stackoverflow.com/questions/61564259/step-num2factor-usage-tidymodel-recipe-package
+
+upsample_rec <- recipe(Attrition ~ ., data = train_data) %>% 
+  update_role(ID, EmployeeNumber, new_role = "ID") %>%
+  step_mutate(JobLevel = factor(JobLevel)) %>% #step_num2factor doesn't seem to like having more than one variable, especially if they have a different number of factors. It will apply the given "Levels" to all variables listed even if that makes no sense...
+    step_mutate(StockOptionLevel = factor(StockOptionLevel)) %>% #so enter step_mutate. See link above.
+    step_YeoJohnson(YearsSinceLastPromotion, #Need to break out step_YeoJohnson into each variable as opposed to a vector for some reason
+                    # PerformanceRating, removed
+                    
+                    YearsAtCompany,
+                    MonthlyIncome,
+                    TotalWorkingYears,
+                    NumCompaniesWorked,
+                    DistanceFromHome,
+                    YearsInCurrentRole,
+                    YearsWithCurrManager,
+                    PercentSalaryHike) %>%
+    step_nzv(all_numeric()) %>% #it looks like step_nzv also takes care of step_zv so these are probably redundant.
+    step_zv(all_predictors()) %>%
+    step_normalize(all_numeric()) %>%
+    step_dummy(all_nominal(), -all_outcomes()) %>% #This only seems to work if you remove the outcome variable. In this case "Attrition"
+    step_upsample(all_outcomes(), skip = TRUE) #see here (https://recipes.tidymodels.org/articles/Skipping.html) We want to upsample on training data, but not on test data
+    # step_novel(all_predictors()) %>% #creates a specification of a recipe step that will assign a previously unseen factor level to a new value. #This is throwing an error downstream. Not dealing with this right now, just commenting out.
+    
+
+  
+  
+upsample_rec
+```
+
+```{r}
+set.seed(2020) #setting seed here because I think step_upsample may need it.
+
+#Possible way to fix step_num2factor
+#From: https://stackoverflow.com/questions/61564259/step-num2factor-usage-tidymodel-recipe-package
+
+upsample_rec <- recipe(Attrition ~ ., data = train_data) %>% 
+  update_role(ID, EmployeeNumber, new_role = "ID") %>%
+  step_mutate(JobLevel = factor(JobLevel)) %>% #step_num2factor doesn't seem to like having more than one variable, especially if they have a different number of factors. It will apply the given "Levels" to all variables listed even if that makes no sense...
+    step_mutate(StockOptionLevel = factor(StockOptionLevel)) %>% #so enter step_mutate. See link above.
+    step_YeoJohnson(
+                    YearsSinceLastPromotion, #Need to break out step_YeoJohnson into each variable as opposed to a vector for some reason
+                    # PerformanceRating, # removed
+                    YearsAtCompany,
+                    MonthlyIncome,
+                    TotalWorkingYears,
+                    NumCompaniesWorked,
+                    # DistanceFromHome, # removed
+                    YearsInCurrentRole,
+                    YearsWithCurrManager
+                    # PercentSalaryHike # removed
+                    ) %>%
+    step_center(all_numeric()) %>%
+    step_scale(all_numeric()) %>% 
+    step_nzv(all_numeric()) %>% #it looks like step_nzv also takes care of step_zv so these are probably redundant.
+    step_zv(all_predictors()) %>%
+    step_upsample(all_outcomes(), skip = TRUE) %>% #see here (https://recipes.tidymodels.org/articles/Skipping.html) We want to upsample on training data, but not on test data
+    # step_novel(all_predictors()) %>% #creates a specification of a recipe step that will assign a previously unseen factor level to a new value. #This is throwing an error downstream. Not dealing with this right now, just commenting out.
+    step_dummy(all_nominal(), -all_outcomes()) #This only seems to work if you remove the outcome variable. In this case "Attrition"
+
+  
+  
+upsample_rec
+```
+
+
+```{r, eval = FALSE}
+set.seed(2020) #setting seed here because I think step_upsample may need it.
+
+#Possible way to fix step_num2factor
+#From: https://stackoverflow.com/questions/61564259/step-num2factor-usage-tidymodel-recipe-package
+
+smote_rec <- recipe(Attrition ~ ., data = train_data) %>% 
+  update_role(ID, EmployeeNumber, new_role = "ID") %>%
+  step_mutate(JobLevel = factor(JobLevel)) %>% #step_num2factor doesn't seem to like having more than one variable, especially if they have a different number of factors. It will apply the given "Levels" to all variables listed even if that makes no sense...
+    step_mutate(StockOptionLevel = factor(StockOptionLevel)) %>% #so enter step_mutate. See link above.
+    step_YeoJohnson(
+                    YearsSinceLastPromotion, #Need to break out step_YeoJohnson into each variable as opposed to a vector for some reason
+                    # PerformanceRating, # removed
+                    YearsAtCompany,
+                    MonthlyIncome,
+                    TotalWorkingYears,
+                    NumCompaniesWorked,
+                    # DistanceFromHome, # removed
+                    YearsInCurrentRole,
+                    YearsWithCurrManager
+                    # PercentSalaryHike # removed
+                    ) %>%
+    step_center(all_numeric()) %>%
+    step_scale(all_numeric()) %>% 
+    step_nzv(all_numeric()) %>% #it looks like step_nzv also takes care of step_zv so these are probably redundant.
+    step_zv(all_predictors()) %>%
+    step_smote(all_outcomes(), skip = TRUE) %>% #see here (https://recipes.tidymodels.org/articles/Skipping.html) We want to upsample on training data, but not on test data
+    # step_novel(all_predictors()) %>% #creates a specification of a recipe step that will assign a previously unseen factor level to a new value. #This is throwing an error downstream. Not dealing with this right now, just commenting out.
+    step_dummy(all_nominal(), -all_outcomes()) #This only seems to work if you remove the outcome variable. In this case "Attrition"
+
+  
+  
+smote_rec
+```
+
+```{r}
+
+adasyn_rec <- recipe(Attrition ~ ., data = train_data) %>% 
+  update_role(ID, EmployeeNumber, new_role = "ID") %>%
+  step_mutate(JobLevel = factor(JobLevel)) %>% #step_num2factor doesn't seem to like having more than one variable, especially if they have a different number of factors. It will apply the given "Levels" to all variables listed even if that makes no sense...
+    step_mutate(StockOptionLevel = factor(StockOptionLevel)) %>% #so enter step_mutate. See link above.
+    step_YeoJohnson(
+                    YearsSinceLastPromotion, #Need to break out step_YeoJohnson into each variable as opposed to a vector for some reason
+                    # PerformanceRating, # removed
+                    YearsAtCompany,
+                    MonthlyIncome,
+                    TotalWorkingYears,
+                    NumCompaniesWorked,
+                    # DistanceFromHome, # removed
+                    YearsInCurrentRole,
+                    YearsWithCurrManager
+                    # PercentSalaryHike # removed
+                    ) %>%
+    step_normalize(all_numeric()) %>%
+    step_nzv(all_predictors()) %>% #it looks like step_nzv also takes care of step_zv so these are probably redundant.
+    step_zv(all_predictors()) %>%
+    step_dummy(all_nominal_predictors()) %>% 
+    step_adasyn(Attrition) #Change or Add Sampling Steps Here as Necessary
+
+
+adasyn_rec
+```
+
+
+Now let's create specs for a logistic regression, random forest, and xgboost.
+
+NOTE: Please check out [Matt Dancho's blog](https://www.business-science.io/code-tools/2024/01/12/xgboost-hyperparameter-tuning.html?he=robstilson%40gmail.com&el=newsletter) on how he got much better results out of an xgBoost model by tuning `learn_rate` first, locking it in, and then training the rest of the hyperparmeters. 
+
+```{r}
+library(rules)
+library(baguette)
+
+# Logistic Regression set up for Lasso, Ridge, and Elastic-net
+
+logistic_reg_spec <-
+      # specify that the model is a logistic regression
+  logistic_reg(penalty = tune(), mixture = tune()) %>% #Setting an arbitrary penalty of 0.1 here just to see if it will run. Will substitute with tune() later down in the script
+  # select the engine/package that underlies the model
+  set_engine("glmnet") %>% #Using glmnet instead of glm per error message below when trying to set up the grid. Error: Engine 'glm' is not available. Please use one of: 'lm', 'glmnet', 'stan', 'spark', 'keras'
+  # choose either the continuous regression or binary classification mode
+  set_mode("classification")
+
+# Random Forest
+
+rf_spec <- rand_forest(
+  mtry = tune(), #we don't know what to put here yet, so we use `tune` as a filler
+  # trees = tune(),
+  trees = 100, #1000 #going low here for times sake. You usually want to start with at least 1000
+  min_n = tune() #we don't know what to put here yet, so we use `tune` as a filler
+) %>%
+  set_mode("classification") %>%
+  set_engine("ranger", importance = "permutation") #make sure to include "importance" so that you can run VIP later
+
+#xgBoost
+
+xgb_spec <- 
+   boost_tree(tree_depth = tune(),
+              learn_rate = tune(),
+              loss_reduction = tune(),
+              min_n = tune(),
+              sample_size = tune(),
+              # trees = tune(),
+              trees = 100 # tune()
+              ) %>% 
+   set_engine("xgboost") %>% 
+   set_mode("classification")
+```
+
+# CREATING THE WORKFLOW SET
+Check out (https://www.tmwr.org/workflow-sets.html#racing-example) for a more comprehensive example.
+
+Workflow sets take named lists of preprocessors and model specifications and combine them into an object containing multiple workflows. There are three possible kinds of preprocessors:
+
+* A standard R formula
+* A recipe object (prior to estimation/prepping)
+* A dplyr-style selector to choose the outcome and predictors
+
+As a first workflow set example, let’s combine the recipe that only standardizes the predictors to the nonlinear models that require that the predictors be in the same units.
+
+```{r}
+recipe_list <- list(
+    NOSAMPLING = no_sample_rec,
+    # SMOTE = smote_rec, # SMOTE isn't working for some reason
+    ADASYN = adasyn_rec,
+    UPSAMPLE = upsample_rec
+)
+```
+
+```{r}
+model_list <- list(Logistic_Reg = logistic_reg_spec,
+                   Random_Forest = rf_spec,
+                   xgBoosted_Trees = xgb_spec
+                   )
+```
+
+Create your list of metrics.
+
+```{r}
+class_metric <- metric_set(accuracy, 
+                           f_meas, 
+                           j_index, 
+                           kap, 
+                           precision, 
+                           sensitivity, 
+                           specificity, 
+                           roc_auc, 
+                           mcc, 
+                           pr_auc)
+```
+
+When we do this and then try to rank candidates by another metric, like "pr_auc", we get the following warning: 
+Warning: Metric "accuracy" was used to evaluate model candidates in the race but "pr_auc" has been chosen to rank the candidates. These results may not agree with the race.
+
+What if we set up `class_metric` in different order? Let's put j_index at the top.
+
+```{r}
+class_metric <- metric_set(j_index, 
+                           accuracy, 
+                           f_meas, 
+                           kap, 
+                           precision, 
+                           sensitivity, 
+                           specificity, 
+                           roc_auc, 
+                           mcc, 
+                           pr_auc)
+```
+
+
+```{r}
+wf_set <- workflow_set(
+    preproc = recipe_list,
+    models = model_list,
+    cross = TRUE
+)
+
+wf_set
+```
+
+
+Since there is only a single preprocessor, this function creates a set of workflows with this value. If the preprocessor contained more than one entry, the function would create all combinations of preprocessors and models.
+
+The `wflow_id` column is automatically created but can be modified using a call to `mutate()`. The `info` column contains a tibble with some identifiers and the workflow object. The workflow can be extracted:
+
+```{r}
+wf_set %>% extract_workflow(id = "UPSAMPLE_Random_Forest")
+```
+
+# TUNING AND EVALUATING THE MODELS
+Almost all of these workflows contain tuning parameters. In order to evaluate their performance, we can use the standard tuning or resampling functions (e.g., `tune_grid()` and so on). The workflow_map() function will apply the same function to all of the workflows in the set; the default is `tune_grid()`.
+
+For this example, grid search is applied to each workflow using up to 25 different parameter candidates. There are a set of common options to use with each execution of `tune_grid()`. For example, we will use the same resampling and control objects for each workflow, along with a grid size of 25. The `workflow_map()` function has an additional argument called seed that is used to ensure that each execution of `tune_grid()` consumes the same random numbers.
+
+```{r, eval = FALSE}
+grid_ctrl <-
+   control_grid(
+      save_pred = TRUE,
+      parallel_over = "everything",
+      save_workflow = TRUE
+   )
+
+grid_results <-
+   # all_workflows %>% # this object can contain multiple workflows instead of just the single one we created.
+   wf_set %>%
+   workflow_map(
+      seed = 1503,
+      resamples = cv_folds,
+      grid = 25,
+      metrics = class_metric,
+      control = grid_ctrl
+   )
+```
+
+The results show that the `option` and `result` columns have been updated:
+
+```{r, eval = FALSE}
+grid_ctrl <-
+   control_grid(
+      save_pred = TRUE,
+      parallel_over = "everything",
+      save_workflow = TRUE
+   )
+
+full_results_time <- 
+   system.time(
+      grid_results <- 
+         # all_workflows %>% 
+         wf_set %>%
+         workflow_map(seed = 1503, 
+                      resamples = cv_folds, 
+                      grid = 25, 
+                      control = grid_ctrl,
+                      metrics = class_metric,
+                      verbose = TRUE)
+   )
+```
+
+```{r, eval = FALSE}
+num_grid_models <- nrow(collect_metrics(grid_results, summarize = FALSE))
+```
+
+```{r, eval = FALSE}
+grid_results
+```
+
+The `option` column now contains all of the options that we used in the `workflow_map()` call. This makes our results reproducible. In the `result` columns, the “`tune[+]`” and “`rsmp[+]`” notations mean that the object had no issues. A value such as “`tune[x]`” occurs if all of the models failed for some reason.
+
+There are a few convenience functions for examining the results. The `rank_results()` function will order the models by some performance metric. By default, it uses the first metric in the metric set (RMSE in this instance).
+
+```{r, eval = FALSE}
+grid_results %>% 
+   rank_results() %>% 
+   # filter(.metric == "rmse") %>% 
+   filter(.metric == "pr_auc") %>%
+   select(model, .config, roc_auc = mean, rank)
+```
+
+Also by default, the function ranks all of the candidate sets; that’s why the same model can show up multiple times in the output. An option, called `select_best`, can be used to rank the models using their best tuning parameter combination.
+
+The `autoplot()` method plots the rankings; it also has a `select_best` argument. In the plot below, the best results for each model are visualized.
+
+```{r, eval = FALSE}
+autoplot(
+   grid_results,
+   rank_metric = "pr_auc",  # <- how to order models
+   metric = "pr_auc",       # <- which metric to visualize
+   select_best = TRUE     # <- one point per workflow
+)
+```
+
+In case you want to see the tuning parameter results for a specific model, the `id` argument can take a single value from the `wflow_id` column for which model to plot:
+
+```{r, eval = FALSE}
+autoplot(grid_results, id = "normalized_Logistic_Reg", metric = "pr_auc")
+```
+
+```{r, eval = FALSE}
+autoplot(grid_results, id = "normalized_RF", metric = "pr_auc")
+```
+
+```{r, eval = FALSE}
+autoplot(grid_results, id = "normalized_XGB", metric = "pr_auc")
+```
+
+There are also methods for `collect_predictions()` and `collect_metrics()`.
+
+In the original example, this approach to model screening fits a total of 25,200 models. Using 3 workers in parallel, the estimation process took 1.6 hours to complete. 
+
+Our turncated method took much less time, but I would suggest boosting the number of trees to at least 1,000 for RF and possibly tuning the number of trees for xgBoost instead of using just 100. Then have it run overnight and see what it shows in the morning. 
+
+# EFFICIENTLY SCREENING MODELS
+One effective method for screening a large set of models efficiently is to use the racing approach described in Section 13.5.4. With a workflow set, we can use the `workflow_map()` function for this racing approach. Recall that after we pipe in our workflow set, the argument we use is the function to apply to the workflows; in this case, we can use a value of "`tune_race_anova`". We also pass an appropriate control object; otherwise the options would be the same as the code in the previous section.
+
+```{r}
+start_time <- now()
+
+doParallel::registerDoParallel() # Make sure this is part of the code chunk or it will not run correctly.
+
+library(finetune)
+
+race_ctrl <-
+   control_race(
+      save_pred = TRUE,
+      parallel_over = "everything",
+      save_workflow = TRUE
+   )
+
+race_results <-
+   # all_workflows %>%
+   wf_set %>%
+   workflow_map(
+      "tune_race_anova",
+      seed = 1503,
+      resamples = cv_folds,
+      grid = 25,
+      metrics = class_metric,
+      control = race_ctrl
+   )
+
+
+end_time <- now()
+
+end_time - start_time
+
+# Time difference of 19.47023 mins
+```
+
+The new object looks very similar, although the elements of the result column show a value of "`race[+]`", indicating a different type of object:
+
+```{r}
+race_results
+```
+
+The same helpful functions are available for this object to interrogate the results and, in fact, the basic `autoplot()` method produces similar trends:
+
+```{r}
+autoplot(
+   race_results,
+   rank_metric = "pr_auc",  
+   metric = "pr_auc",       
+   select_best = TRUE    
+)
+```
+
+```{r}
+#Visualize Performance Comparison of Workflows
+collect_metrics(race_results) %>% 
+    separate(wflow_id, into = c("Recipe", "Model_Type"), sep = "_", remove = F, extra = "merge") %>%
+    filter(.metric == "pr_auc") %>% 
+    group_by(wflow_id) %>% 
+    filter(mean == max(mean)) %>% 
+    group_by(model) %>% 
+    select(-.config) %>% 
+    distinct() %>%
+    ungroup() %>% 
+    mutate(Workflow_Rank =  row_number(-mean),
+           .metric = str_to_upper(.metric)) %>%
+    ggplot(aes(x=Workflow_Rank, y = mean, shape = Recipe, color = Model_Type)) + # shape = Recipe (cut off anything with "_" due to separate above)
+    geom_point() +
+    geom_errorbar(aes(ymin = mean-std_err, ymax = mean+std_err)) +
+    theme_minimal()+
+    scale_colour_viridis_d() +
+    labs(title = "Performance Comparison of Workflow Sets", x = "Workflow Rank", y = "PR_AUC", color = "Model Types", shape = "Recipes")
+```
+
+
+In the original example:
+Overall, the racing approach estimated a total of 4,240 models, 16.83% of the full set of 25,200 models in the full grid. As a result, the racing approach was 4.12-fold faster.
+
+Let's try j-index.
+```{r}
+
+#Visualize Performance Comparison of Workflows
+collect_metrics(race_results) %>% 
+    separate(wflow_id, into = c("Recipe", "Model_Type"), sep = "_", remove = F, extra = "merge") %>%
+    filter(.metric == "j_index") %>% 
+    group_by(wflow_id) %>% 
+    filter(mean == max(mean)) %>% 
+    group_by(model) %>% 
+    select(-.config) %>% 
+    distinct() %>%
+    ungroup() %>% 
+    mutate(Workflow_Rank =  row_number(-mean),
+           .metric = str_to_upper(.metric)) %>%
+    ggplot(aes(x=Workflow_Rank, y = mean, shape = Recipe, color = Model_Type)) + # shape = Recipe (cut off anything with "_" due to separate above)
+    geom_point() +
+    geom_errorbar(aes(ymin = mean-std_err, ymax = mean+std_err)) +
+    theme_minimal()+
+    scale_colour_viridis_d() +
+    labs(title = "Performance Comparison of Workflow Sets", x = "Workflow Rank", y = "J-Index", color = "Model Types", shape = "Recipes")
+```
+
+
+Did we get similar results? For both objects, we rank the results, merge them together, and plot them against one another:
+
+```{r, eval = FALSE}
+matched_results <- 
+   rank_results(race_results, select_best = TRUE) %>% 
+   select(wflow_id, .metric, race = mean, config_race = .config) %>% 
+   inner_join(
+      rank_results(grid_results, select_best = TRUE) %>% 
+         select(wflow_id, .metric, complete = mean, 
+                config_complete = .config, model),
+      by = c("wflow_id", ".metric"),
+   ) %>%  
+   # filter(.metric == "rmse")
+   filter(.metric == "pr_auc")
+
+matched_results %>% 
+   ggplot(aes(x = complete, y = race)) + 
+   geom_abline(lty = 3) + 
+   geom_point(aes(col = model)) + 
+   coord_obs_pred() + 
+   # labs(x = "Complete Grid RMSE", y = "Racing RMSE")
+   labs(x = "Complete Grid PR_AUC", y = "Racing PR_AUC")
+```
+
+While the racing approach selected the same candidate parameters as the complete grid for only 33.33% of the models, the performance metrics of the models selected by racing were nearly equal. The correlation of RMSE values was 0.962 and the rank correlation was 0.916. This indicates that, within a model, there were multiple tuning parameter combinations that had nearly identical results.
+
+# FINALIZING A MODEL
+Similar to what we have shown in previous chapters, choosing the final model and fitting it on the training set is straightforward. The first step is to pick a workflow to finalize. Since the boosted tree model worked well, we’ll extract that from the set, update the parameters with the numerically best settings, and fit to the training set:
+
+# Get the best model (race edition) of each method
+
+Regardless of which model performed the best, we are going to take the best of each and save those models so that when we run it again, we simply pull the saved model instead of having to refit everthing.
+
+NOTE: PAY ATTENTION TO THIS AS YOU WILL NEED TO SAVE YOUR MODELS FOR YOUR FINAL PROJECT!!! IF I HAVE TO RUN YOUR MODELS AGAIN FROM SCRATCH, YOU WILL GET POINTS OFF!!!
+
+## Random Forest
+
+```{r}
+#######################################################################################################
+#######################################################################################################
+####################################### RANDOM FOREST #################################################
+
+RF_best_results <-
+    race_results %>%
+    extract_workflow_set_result("ADASYN_Random_Forest") %>%
+    select_best(metric = "pr_auc")
+
+
+RF_best_results
+
+```
+If, for whatever reason, you didn't want to save your model, you could also make a note of the parameters given by RF_best_results. In this case, we were trying to `tune()` mtry and min_n. If you ran the model again, instead of doing the grid_search again, you could just plug in mtry = 5 and min_n = 23.
+
+
+```{r}
+RF_test_results <-
+    race_results %>%
+    extract_workflow("ADASYN_Random_Forest") %>%
+    finalize_workflow(RF_best_results) %>%
+    last_fit(split = data_split) # the object of your initial_split goes here. In this case it is data_split
+
+```
+
+## Variable Importance
+
+```{r}
+#######################################################################################################
+#######################################################################################################
+###################################### VARIABLE IMPORTANCE ############################################
+
+# In Matt Dancho/Julia Silge Workflowsets tutorial (https://www.youtube.com/watch?v=l5is1lF3Gq0), wflwset_tune_results = race_results in this analysis
+
+RF_params_best_model <- race_results %>%
+    extract_workflow_set_result(id = "ADASYN_Random_Forest") %>%
+    select_best(metric = "pr_auc")
+
+RF_wflw_fit_final <- race_results %>%
+    extract_workflow("ADASYN_Random_Forest") %>%
+    finalize_workflow(RF_params_best_model) %>%
+    fit(Data)
+
+### Important variables
+
+RF_importance_tbl <- vip::vi(RF_wflw_fit_final$fit$fit$fit)
+
+# This
+RF_wflw_fit_final %>%
+    fit(Data) %>%
+    extract_fit_parsnip() %>%
+    vip::vi()
+
+# is the same as this importance_tbl <- vip::vi(wflw_fit_final$fit$fit$fit). I'm not sure this this helps, just found it interesting
+
+vip::vip(RF_wflw_fit_final$fit$fit$fit)
+
+vip::vip(RF_wflw_fit_final$fit$fit$fit,
+         geom = "col",
+         aesthetics = list(fill = "steelblue")) +
+    labs(title = "Feature Importance")
+
+```
+
+### Save the model
+
+```{r, eval = FALSE}
+### Save the final model
+# From: https://stackoverflow.com/questions/64397754/how-to-save-a-parsnip-model-fit-from-ranger
+# From: https://community.rstudio.com/t/save-a-model-in-tidymodels/93756
+
+# Going with saveRDS()
+
+saveRDS(RF_wflw_fit_final, file = "C:/UGA IOMP Class/UGA IOMP 2024/01_Models/RF_model_for_attrition_2024.rds")
+```
+
+## Make Predictions
+
+```{r}
+### Make predictions
+
+RF_predictions_tbl <- RF_wflw_fit_final %>%
+    predict(new_data = Data) %>%
+    bind_cols(Data)
+
+
+### Get probabilities of someone leaving
+
+RF_prob_predictions <- RF_wflw_fit_final %>%
+    predict(new_data = Data,
+            type = "prob") # added type = "prob" to give the probabilities
+
+RF_predictions_tbl <- RF_prob_predictions %>%
+    bind_cols(RF_predictions_tbl)
+```
+
+```{r}
+RF_test_results %>%
+    collect_predictions()
+```
+
+## PR Curve
+
+```{r}
+RF_test_results %>%
+  collect_predictions() %>%
+  pr_curve(Attrition, .pred_No) %>%
+  ggplot(aes(x = recall, y = precision)) +
+  geom_path() + 
+  coord_equal() +
+  theme_bw()
+```
+
+
+
+## ROC CURVE
+
+```{r}
+#######################################################################################################
+#######################################################################################################
+########################################### ROC CURVE #################################################
+
+# Plot the ROC Curve
+
+RF_test_results %>%
+    collect_predictions() %>%
+    roc_curve(Attrition, .pred_No) %>%
+    ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+    geom_line(size = 1.5, color = "midnightblue") +
+    geom_abline(
+        lty = 2, alpha = 0.5,
+        color = "gray50",
+        size = 1.2
+    )
+```
+
+
+```{r}
+#######################################################################################################
+#######################################################################################################
+####################################### CONFUSION MATRIX ##############################################
+
+# generate a confusion matrix
+conflict_prefer("spec", "yardstick")
+
+
+RF_test_results %>%
+    collect_predictions() %>%
+    conf_mat(truth = Attrition, estimate = .pred_class)
+
+```
+
+We are predicting 22/60 or 36.7% of the people who actually leave. Not great.
+
+```{r}
+# Again, we'll dig a little deeper by adding `summary` after we call `conf_mat`.
+
+RF_test_results %>%
+    collect_predictions() %>%
+    conf_mat(truth = Attrition, estimate = .pred_class) %>%
+    summary()
+```
+
+
+## Logistic Regression
+
+```{r}
+#######################################################################################################
+#######################################################################################################
+#################################### LOGISTIC REGRESSION ##############################################
+
+LR_best_results <-
+    race_results %>%
+    extract_workflow_set_result("ADASYN_Logistic_Reg") %>%
+    select_best(metric = "pr_auc")
+
+
+LR_best_results
+
+```
+If, for whatever reason, you didn't want to save your model, you could also make a note of the parameters given by LR_best_results. In this case, we were trying to `tune()` penalty and mixture. If you ran the model again, instead of doing the grid_search again, you could just plug in penalty = 7.468135e-10 and mixture = 0.1256298.
+
+
+```{r}
+LR_test_results <-
+    race_results %>%
+    extract_workflow("ADASYN_Logistic_Reg") %>%
+    finalize_workflow(LR_best_results) %>%
+    last_fit(split = data_split) # the object of your initial_split goes here. In this case it is data_split
+
+```
+
+## Variable Importance
+
+```{r}
+#######################################################################################################
+#######################################################################################################
+###################################### VARIABLE IMPORTANCE ############################################
+
+# In Matt Dancho/Julia Silge Workflowsets tutorial (https://www.youtube.com/watch?v=l5is1lF3Gq0), wflwset_tune_results = race_results in this analysis
+
+LR_params_best_model <- race_results %>%
+    extract_workflow_set_result(id = "ADASYN_Logistic_Reg") %>%
+    select_best(metric = "pr_auc")
+
+LR_wflw_fit_final <- race_results %>%
+    extract_workflow("ADASYN_Logistic_Reg") %>%
+    finalize_workflow(LR_params_best_model) %>%
+    fit(Data)
+
+### Important variables
+
+LR_importance_tbl <- vip::vi(LR_wflw_fit_final$fit$fit$fit)
+
+# This
+LR_wflw_fit_final %>%
+    fit(Data) %>%
+    extract_fit_parsnip() %>%
+    vip::vi()
+
+# is the same as this importance_tbl <- vip::vi(wflw_fit_final$fit$fit$fit). I'm not sure this this helps, just found it interesting
+
+vip::vip(LR_wflw_fit_final$fit$fit$fit)
+
+vip::vip(LR_wflw_fit_final$fit$fit$fit,
+         geom = "col",
+         aesthetics = list(fill = "steelblue")) +
+    labs(title = "Feature Importance")
+
+```
+
+For Logistic Regression, if you want to look at VIP by sign, you can do it this way.
+
+```{r}
+vip::vip(LR_wflw_fit_final$fit$fit$fit,
+         geom = "col",
+         mapping = aes_string(fill = "Sign")) +
+    labs(title = "Feature Importance")
+```
+
+
+### Save the model
+
+```{r}
+### Save the final model
+# From: https://stackoverflow.com/questions/64397754/how-to-save-a-parsnip-model-fit-from-ranger
+# From: https://community.rstudio.com/t/save-a-model-in-tidymodels/93756
+
+# Going with saveRDS()
+
+saveRDS(LR_wflw_fit_final, file = "C:/UGA IOMP Class//UGA IOMP 2024/01_Models/LR_model_for_attrition_2024.rds")
+```
+
+## Make Predictions
+
+```{r}
+### Make predictions
+
+LR_predictions_tbl <- LR_wflw_fit_final %>%
+    predict(new_data = Data) %>%
+    bind_cols(Data)
+
+
+### Get probabilities of someone leaving
+
+LR_prob_predictions <- LR_wflw_fit_final %>%
+    predict(new_data = Data,
+            type = "prob") # added type = "prob" to give the probabilities
+
+LR_predictions_tbl <- LR_prob_predictions %>%
+    bind_cols(LR_predictions_tbl)
+```
+
+```{r}
+LR_test_results %>%
+    collect_predictions()
+```
+
+## PR Curve
+
+```{r}
+LR_test_results %>%
+  collect_predictions() %>%
+  pr_curve(Attrition, .pred_No) %>%
+  ggplot(aes(x = recall, y = precision)) +
+  geom_path() + 
+  coord_equal() +
+  theme_bw()
+```
+
+
+
+## ROC CURVE
+
+```{r}
+#######################################################################################################
+#######################################################################################################
+########################################### ROC CURVE #################################################
+
+# Plot the ROC Curve
+
+LR_test_results %>%
+    collect_predictions() %>%
+    roc_curve(Attrition, .pred_No) %>%
+    ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+    geom_line(size = 1.5, color = "midnightblue") +
+    geom_abline(
+        lty = 2, alpha = 0.5,
+        color = "gray50",
+        size = 1.2
+    )
+```
+
+
+```{r}
+#######################################################################################################
+#######################################################################################################
+####################################### CONFUSION MATRIX ##############################################
+
+# generate a confusion matrix
+conflict_prefer("spec", "yardstick")
+
+
+LR_test_results %>%
+    collect_predictions() %>%
+    conf_mat(truth = Attrition, estimate = .pred_class)
+
+```
+
+We are predicting 43/60 or 71.7% of the people who actually leave. Much better!
+
+```{r}
+# Again, we'll dig a little deeper by adding `summary` after we call `conf_mat`.
+
+LR_test_results %>%
+    collect_predictions() %>%
+    conf_mat(truth = Attrition, estimate = .pred_class) %>%
+    summary()
+```
+
+## xgBoost
+
+```{r}
+#######################################################################################################
+#######################################################################################################
+####################################### RANDOM FOREST #################################################
+
+XGB_best_results <-
+    race_results %>%
+    extract_workflow_set_result("ADASYN_xgBoosted_Trees") %>%
+    select_best(metric = "pr_auc")
+
+
+XGB_best_results
+
+```
+
+If, for whatever reason, you didn't want to save your model, you could also make a note of the parameters given by XGB_best_results. 
+```{r, eval = FALSE}
+# # A tibble: 1 x 6
+#   min_n tree_depth learn_rate loss_reduction sample_size .config              
+#   <int>      <int>      <dbl>          <dbl>       <dbl> <chr>                
+# 1    35          5      0.286       1.16e-10       0.923 Preprocessor1_Model16
+```
+
+
+```{r}
+XGB_test_results <-
+    race_results %>%
+    extract_workflow("ADASYN_xgBoosted_Trees") %>%
+    finalize_workflow(XGB_best_results) %>%
+    last_fit(split = data_split) # the object of your initial_split goes here. In this case it is data_split
+
+```
+
+## Variable Importance
+
+```{r}
+#######################################################################################################
+#######################################################################################################
+###################################### VARIABLE IMPORTANCE ############################################
+
+# In Matt Dancho/Julia Silge Workflowsets tutorial (https://www.youtube.com/watch?v=l5is1lF3Gq0), wflwset_tune_results = race_results in this analysis
+
+XGB_params_best_model <- race_results %>%
+    extract_workflow_set_result(id = "ADASYN_xgBoosted_Trees") %>%
+    select_best(metric = "pr_auc")
+
+XGB_wflw_fit_final <- race_results %>%
+    extract_workflow("ADASYN_xgBoosted_Trees") %>%
+    finalize_workflow(XGB_params_best_model) %>%
+    fit(Data)
+
+### Important variables
+
+XGB_importance_tbl <- vip::vi(XGB_wflw_fit_final$fit$fit$fit)
+
+# This
+XGB_wflw_fit_final %>%
+    fit(Data) %>%
+    extract_fit_parsnip() %>%
+    vip::vi()
+
+# is the same as this importance_tbl <- vip::vi(wflw_fit_final$fit$fit$fit). I'm not sure this this helps, just found it interesting
+
+vip::vip(XGB_wflw_fit_final$fit$fit$fit)
+
+vip::vip(XGB_wflw_fit_final$fit$fit$fit,
+         geom = "col",
+         aesthetics = list(fill = "steelblue")) +
+    labs(title = "Feature Importance")
+
+```
+
+### Save the model
+
+```{r}
+### Save the final model
+# From: https://stackoverflow.com/questions/64397754/how-to-save-a-parsnip-model-fit-from-ranger
+# From: https://community.rstudio.com/t/save-a-model-in-tidymodels/93756
+
+# Going with saveRDS()
+
+saveRDS(XGB_wflw_fit_final, file = "C:/UGA IOMP Class//UGA IOMP 2024/01_Models/XGB_model_for_attrition_2024.rds")
+```
+
+## Make Predictions
+
+```{r}
+### Make predictions
+
+XGB_predictions_tbl <- XGB_wflw_fit_final %>%
+    predict(new_data = Data) %>%
+    bind_cols(Data)
+
+
+### Get probabilities of someone leaving
+
+XGB_prob_predictions <- XGB_wflw_fit_final %>%
+    predict(new_data = Data,
+            type = "prob") # added type = "prob" to give the probabilities
+
+XGB_predictions_tbl <- XGB_prob_predictions %>%
+    bind_cols(XGB_predictions_tbl)
+```
+
+```{r}
+XGB_test_results %>%
+    collect_predictions()
+```
+
+## PR Curve
+
+```{r}
+XGB_test_results %>%
+  collect_predictions() %>%
+  pr_curve(Attrition, .pred_No) %>%
+  ggplot(aes(x = recall, y = precision)) +
+  geom_path() + 
+  coord_equal() +
+  theme_bw()
+```
+
+
+
+## ROC CURVE
+
+```{r}
+#######################################################################################################
+#######################################################################################################
+########################################### ROC CURVE #################################################
+
+# Plot the ROC Curve
+
+XGB_test_results %>%
+    collect_predictions() %>%
+    roc_curve(Attrition, .pred_No) %>%
+    ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+    geom_line(size = 1.5, color = "midnightblue") +
+    geom_abline(
+        lty = 2, alpha = 0.5,
+        color = "gray50",
+        size = 1.2
+    )
+```
+
+
+```{r}
+#######################################################################################################
+#######################################################################################################
+####################################### CONFUSION MATRIX ##############################################
+
+# generate a confusion matrix
+conflict_prefer("spec", "yardstick")
+
+
+XGB_test_results %>%
+    collect_predictions() %>%
+    conf_mat(truth = Attrition, estimate = .pred_class)
+
+```
+
+We are predicting 23/60 or 38.3% of the people who actually leave. Not great.
+
+```{r}
+# Again, we'll dig a little deeper by adding `summary` after we call `conf_mat`.
+
+XGB_test_results %>%
+    collect_predictions() %>%
+    conf_mat(truth = Attrition, estimate = .pred_class) %>%
+    summary()
+```
+## Spit and Duct tape ensemble model?
+
+Now that we have the predictions from all of these models, could we create a spit and duct tape ensemble model by taking the .pred_Yes column from each of them, relabeling them as [model]_pred_Yes and then looking across them to see which people all the of the models predicted would leave? When you have a chance, try it. Then try using the `stacks` package for a more "proper" ensemble model to see if the results are any better.
+
+
+## Threshold Analysis
+
+Everything we have done so far has set the threshold for someone leaving/staying at 0.50. This may not be optimal. The ideal threshold could be much lower or higher. The following is from the article [Bank Customer Churn with Tidymodels - Part 2 Decision Threshold Analysis](https://towardsdatascience.com/bank-customer-churn-with-tidymodels-part-2-decision-threshold-analysis-c658845ef1f).
+
+```{r}
+LR_params_best_model <- race_results %>%
+    extract_workflow_set_result(id = "ADASYN_Logistic_Reg") %>%
+    select_best(metric = "j_index") # notice we switched this from pr_auc to j_index
+
+LR_wflw_fit <- race_results %>%
+    extract_workflow("ADASYN_Logistic_Reg") %>%
+    finalize_workflow(LR_params_best_model) %>%
+    fit(training(data_split))
+```
+
+## Visualize the thresholds
+
+```{r}
+LR_wflw_fit %>% 
+  predict(new_data = testing(data_split), type = 'prob') %>% 
+  bind_cols(testing(data_split)) %>% 
+  ggplot(aes(x=.pred_Yes, fill = Attrition, color = Attrition)) +
+    geom_histogram(bins = 40, alpha = 0.5) +
+    theme_minimal() +
+    scale_fill_viridis_d(aesthetics = c('color', 'fill'), end = 0.8) +
+    labs(title = 'Distribution of Prediction Probabilities by Attrition Status', x = 'Probability Prediction', y = 'Count')
+```
+
+Interesting. What does this look like for our random forest?
+
+```{r}
+RF_params_best_model <- race_results %>%
+    extract_workflow_set_result(id = "ADASYN_Random_Forest") %>%
+    select_best(metric = "j_index") # notice we switched this from pr_auc to j_index
+
+RF_wflw_fit <- race_results %>%
+    extract_workflow("ADASYN_Random_Forest") %>%
+    finalize_workflow(RF_params_best_model) %>%
+    fit(training(data_split))
+```
+
+```{r}
+RF_wflw_fit %>% 
+  predict(new_data = testing(data_split), type = 'prob') %>% 
+  bind_cols(testing(data_split)) %>% 
+  ggplot(aes(x=.pred_Yes, fill = Attrition, color = Attrition)) +
+    geom_histogram(bins = 40, alpha = 0.5) +
+    theme_minimal() +
+    scale_fill_viridis_d(aesthetics = c('color', 'fill'), end = 0.8) +
+    labs(title = 'Distribution of Prediction Probabilities by Attrition Status', x = 'Probability Prediction', y = 'Count')
+```
+
+By predicting probabilities, we can visualize the respective distribution of churn status. At the default threshold of 0.5, predictions greater then are predicted as churning and vice versa. Threshold analysis identifies an optimal threshold given desired metrics. The probably package enables us to carry out such analysis. probably::threshold_perf() takes the Truth, Estimate and sequentially varies the threshold and calculates sensitivity, specificity and J-Index for each threshold.
+
+```{r}
+#Generate Probability Prediction Dataset
+LR_wflw_pred <- LR_wflw_fit %>% 
+  predict(new_data = testing(data_split), type = 'prob') %>% 
+  bind_cols(testing(data_split)) %>% 
+  select(Attrition, .pred_No, .pred_Yes)
+```
+
+```{r}
+#Generate Sequential Threshold Tibble
+threshold_data <- LR_wflw_pred %>% 
+  threshold_perf(truth = Attrition, 
+                 estimate = .pred_No, # This needs to be .pred_No instead of .pred_Yes. Not sure why.
+                 thresholds = seq(0.1, 1, by = 0.01))
+
+# If you have a Mac, check to see if it fully spells out "sens" and "spec"
+```
+
+```{r}
+#Identify Threshold for Maximum J-Index
+max_j_index <- threshold_data %>% 
+  filter(.metric == 'j_index') %>% 
+  filter(.estimate == max(.estimate)) %>% 
+  select(.threshold) %>% 
+  as_vector()
+```
+
+```{r}
+max_j_index_with_estimate <- threshold_data %>%
+  filter(.metric == 'j_index') %>% 
+  filter(.estimate == max(.estimate)) %>% 
+  select(.threshold, .estimate) %>% 
+  as_tibble
+```
+
+
+
+```{r}
+#Visualise Threshold Analysis
+threshold_data %>% 
+  filter(.metric != 'distance') %>% 
+  ggplot(aes(x=.threshold, y=.estimate, color = .metric)) +
+   geom_line(size = 2) +
+   geom_vline(xintercept = max_j_index, lty = 5, alpha = .6) +
+   theme_minimal() +
+   scale_colour_viridis_d(end = 0.8) +
+   labs(x='Threshold', 
+        y='Estimate', 
+        title = 'Balancing Performance by Varying Threshold',
+        subtitle = 'Verticle Line = Max J-Index',
+        color = 'Metric')
+```
+
+### Threshold with the highest J-index
+
+```{r}
+max_j_index_with_estimate
+
+# # A tibble: 1 x 2
+#   .threshold .estimate
+#        <dbl>     <dbl>
+# 1       0.47     0.529 
+
+```
+
+
+Our analysis indicates that the threshold with the highest J-index is 0.40 with a J-index estimate of 0.53 (this will go in the cost function graph later).
+
+To extend this analysis we can hypothetically tune the threshold to any available metric as below. I couldn’t get this to work using a yardstick::metric_set() and probably::threshold_perf() and include pr_auc and roc_auc, so had to use a purrr-fect tricks.
+
+
+```{r, eval = FALSE}
+# This currently isn't working. Bonus points to whoever figures it out!
+
+ELSE <- TRUE
+
+LR_wflw_pred_MOD <- LR_wflw_pred %>%
+    mutate(Attrition = case_when(Attrition == "Yes" ~ 1,
+                                 ELSE ~ 0)) %>%
+    mutate(Attrition = as.factor(Attrition))
+
+LR_wflw_pred_MOD
+    
+```
+
+
+```{r, eval = FALSE}
+# This currently isn't working. Bonus points to whoever figures it out!
+
+#Threshold Analysis by Several Classification Metrics
+list(pred_df <- list(pred_df = LR_wflw_pred_MOD), 
+     threshold <- list(threshold = seq(0.03, 0.99, by = 0.01))) %>% 
+expand_grid() %>% 
+  mutate(pred_data = map2(pred_df, threshold, ~mutate(.x, .prob_class = as_factor(if_else(.pred_Yes < .y , 0, 1)))),
+         pred_data = map2(pred_data,  threshold, ~mutate(.x, .prob_metric = if_else(.pred_Yes < .y , 0, 1))),
+         pred_metric = map(pred_data, ~class_metric(.x, truth = Attrition, estimate = .prob_class)),
+         roc_auc = map(pred_data, ~roc_auc(.x, truth = Attrition, estimate = .prob_metric)),
+         pr_auc = map(pred_data, ~pr_auc(.x, truth = Attrition, estimate = .prob_metric)),
+         pred_metric = pmap(list(pred_metric, roc_auc, pr_auc),~bind_rows(..1,..2,..3))) %>%
+  select(pred_metric, threshold) %>%                                                            
+  unnest(pred_metric) %>%                                                                        
+  ggplot(aes(x=threshold, y=.estimate, color = .metric)) +
+    geom_line(size = 1) +
+    scale_color_viridis_d() +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45)) +
+    facet_wrap(~.metric, nrow = 2) +
+    labs(title = 'Impact of Decision Threshold on Classification Metrics', x= 'Threshold', y = 'Estimate', color = 'Metric')
+```
+
+The above aside, we have all we need from the output of probably::threshold_perf(). Sensitivity and Specificity enable us to calculate the FPR and FNR for a particular threshold, and hence a cost function.
+
+### Cost Function
+
+If we say the cost of an intervention is $5,000, but the amount saved if somebody who was going to leave ends up staying, then we arrive at the following:
+
+* True Positive (TP) = $0
+* True Negative (TN) = $145,000
+* False Positive (FP) = $150,000
+* False Negative (FN) = $5,000
+
+```{r}
+threshold_data %>% 
+  filter(.metric %in% c('sensitivity', 'specificity')) %>% 
+  pivot_wider(id_cols = .threshold, values_from = .estimate, names_from = .metric) %>% 
+  mutate(Cost_FN = ((1-sensitivity) * 5000), 
+         Cost_FP = ((1-specificity) * 150000),
+         Total_Cost = Cost_FN + Cost_FP)
+```
+
+
+```{r}
+threshold_data %>% 
+  filter(.metric %in% c('sensitivity', 'specificity')) %>% 
+  pivot_wider(id_cols = .threshold, values_from = .estimate, names_from = .metric) %>% 
+  mutate(Cost_FN = ((1-sensitivity) * 5000), 
+         Cost_FP = ((1-specificity) * 150000),
+         Total_Cost = Cost_FN + Cost_FP) %>% 
+ select(.threshold, Cost_FN, Cost_FP, Total_Cost) %>% 
+ pivot_longer(2:4, names_to = 'Cost_Function', values_to = 'Cost') %>% 
+  ggplot(aes(x = .threshold, y = Cost, color = Cost_Function)) +
+    geom_line(size = 1.5) +
+    theme_minimal() +
+    scale_colour_viridis_d(end = 0.8) +
+    labs(title = 'Threshold Cost Function', x = 'Threshold')
+```
+In this case the Total_Cost bottoms out when the sensitivity is 1.00 or we get 100% of the people who are going to leave at the cost of everything else. What if we adjust the parameters to say that we are only going to save $15,000 for each correct person we identify is going to leave, but the intervention still cost $5,000?
+
+```{r}
+threshold_data %>% 
+  filter(.metric %in% c('sensitivity', 'specificity')) %>% 
+  pivot_wider(id_cols = .threshold, values_from = .estimate, names_from = .metric) %>% 
+  mutate(Cost_FN = ((1-sensitivity) * 5000), 
+         Cost_FP = ((1-specificity) * 15000),
+         Total_Cost = Cost_FN + Cost_FP) %>% 
+ select(.threshold, Cost_FN, Cost_FP, Total_Cost) %>% 
+ pivot_longer(2:4, names_to = 'Cost_Function', values_to = 'Cost') %>% 
+  ggplot(aes(x = .threshold, y = Cost, color = Cost_Function)) +
+    geom_line(size = 1.5) +
+    theme_minimal() +
+    scale_colour_viridis_d(end = 0.8) +
+    labs(title = 'Threshold Cost Function', x = 'Threshold')
+```
+
+```{r}
+threshold_data %>% 
+  filter(.metric %in% c('sensitivity', 'specificity')) %>% 
+  pivot_wider(id_cols = .threshold, values_from = .estimate, names_from = .metric) %>% 
+  mutate(Cost_FN = ((1-sensitivity) * 5000), 
+         Cost_FP = ((1-specificity) * 15000),
+         Total_Cost = Cost_FN + Cost_FP) %>%
+    arrange(Total_Cost)
+```
+
+Then our threshold changes to 0.84 (the model thinks somebody has a 84% chance of leaving).
+
+Let's get the corresponding J-index that goes with a threshold of 0.84.
+
+```{r}
+best_j_index_with_estimate_for_cost <- threshold_data %>%
+  filter(.metric == 'j_index') %>% 
+  filter(.threshold == 0.84) %>%
+  select(.threshold, .estimate) %>% 
+  as_tibble
+
+best_j_index_with_estimate_for_cost
+```
+The corresponding J-index to a threshold of 0.84 is 0.22 (to put in the graph below)
+
+
+### Scenario Analysis — Minimising Cost or Maximising Differentiation
+
+As we have established cost functions, we can then identify a decision threshold that minimizes these costs. As noted in the introduction, we can think of two scenarios, as we’ve identified above, the threshold that optimizes the J-index or the threshold that minimizes cost. This is demonstrated below.
+
+```{r}
+threshold_data %>% 
+  filter(.metric %in% c('sensitivity', 'specificity')) %>% 
+  pivot_wider(id_cols = .threshold, values_from = .estimate, names_from = .metric) %>% 
+  mutate(Cost = ((1-sensitivity) * 5000) + ((1-specificity) * 15000),
+         j_index = (sensitivity+specificity)-1) %>% 
+  ggplot(aes(y=Cost, x = .threshold)) +
+    geom_line() +
+    geom_point(aes(size = j_index, color = j_index)) +
+    geom_vline(xintercept = 0.36, lty = 2) + # Put your optimal j-index value here
+    annotate(x = 0.40, y=12500, geom = 'text', label = 'Best Class Differentiation\nJ-Index = 0.533,\nCost = $5,832,\nThreshold = 0.40') +
+    geom_vline(xintercept = 0.84, lty = 2) + # Put your optimal j-index value per the cost function here
+    annotate(x = 0.80, y = 12500, geom = 'text', label = 'Lowest Cost Model\nJ-Index = 0.22,\nCost = $3,818,\nThreshold = 0.84') +    
+    theme_minimal() +
+    scale_colour_viridis_c() +
+    labs(title = 'Decision Threshold Attrition Cost Function', 
+         subtitle = 'Where Cost(FN) = $5,000',
+         x = 'Classification Threshold', size = 'J-Index', color = 'J-Index')
+```
+
+
+And again, one thing we didn't do was look at correlations between our predictors...so we may have some collinearity going on.
+You should re-run this after looking at that...or you could build a new recipe where you `tune` `step_corr` after following along with this video (https://www.youtube.com/watch?v=i4If7kF2xt4&t=546s) on Tuning Pre-Processing Parameters with Tidymodels.
+
+But, remember, just do this for education purposes. ALWAYS HAVE A THEORY on why you are removing one variable over another when it comes to colinearity. 
+
+# Just the code
+
+```{r ref.label = knitr::all_labels(), echo = TRUE, eval = FALSE}
+
+````

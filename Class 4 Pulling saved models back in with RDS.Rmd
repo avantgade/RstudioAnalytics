@@ -1,0 +1,425 @@
+---
+title: "Pulling saved models back in with RDS"
+author: "Rob Stilson"
+date: "2023-07-25"
+output: html_document
+---
+
+
+```{r, echo = FALSE, include= FALSE, warning = FALSE, message = FALSE}
+#' <!-- ####################################################################################################### -->
+#' <!-- ####################################################################################################### -->
+#' <!-- ##################################LOADING PACKAGES##################################################### -->
+
+tryCatch(require(pacman),finally=utils:::install.packages(pkgs='pacman',repos='http://cran.r-project.org'));
+require(pacman)
+
+#' <!-- ##if the above doesn't work, use this code## -->
+#' <!-- ##tryCatch -->
+#' <!-- #detach("package:pacman", unload = TRUE) -->
+#' <!-- #install.packages("pacman", dependencies = TRUE) -->
+#' <!-- # ## install.packages("pacman") -->
+
+pacman::p_load(digest,
+               readxl,
+               readr,
+               dplyr,
+               tidyr,
+               ggplot2,
+               knitr,
+               MASS,
+               RCurl,
+               DT,
+               modelr,
+               broom,
+               purrr,
+               pROC,
+               data.table,
+               VIM,
+               gridExtra,
+               Metrics,
+               randomForest,
+               e1071,
+               corrplot,
+               DMwR2,
+               rsample,
+               skimr,
+               psych,
+               conflicted,
+               tree,
+               tidymodels,
+               janitor,
+               GGally,
+               tidyquant,
+               doParallel,
+               Boruta,
+               correlationfunnel,
+               naniar,
+               plotly,
+               themis,
+               questionr,
+               rules,
+               baguette,
+               finetune,
+               stringr,
+               probably,
+               glmnet,
+               tidylog
+)
+
+# Loading from GitHub
+# pacman::p_load_current_gh("agstn/dataxray")
+```
+
+```{r, echo = FALSE, include= FALSE, warning = FALSE, message = FALSE}
+
+#' <!-- #Loading libraries -->
+
+suppressPackageStartupMessages({
+    library(conflicted) # An Alternative Conflict Resolution Strategy
+    library(readxl) # read in Excel files
+    library(readr) # read in csv files
+    library(MASS) # Functions and datasets to support Venables and Ripley, "Modern Applied Statistics with S" (4th edition, 2002).
+    library(dplyr) # A Grammar of Data Manipulation
+    library(tidyr) # Tidy Messy Data
+    library(broom) # Convert Statistical Objects into Tidy Tibbles
+    library(ggplot2) # grammar of graphics for visualization
+    library(knitr) # A General-Purpose Package for Dynamic Report Generation in R
+    library(RCurl) # General Network (HTTP/FTP/...) Client Interface for R
+    library(DT) # A Wrapper of the JavaScript Library 'DataTables'
+    library(modelr) # Modelling Functions that Work with the Pipe
+    library(purrr) # Functional Programming Tools - helps with mapping (i.e., loops)
+    library(pROC) #	Display and Analyze ROC Curves
+    library(data.table) # Fast aggregation of large data (e.g. 100GB in RAM)
+    library(VIM) # Visualization and Imputation of Missing Values
+    library(gridExtra) # Miscellaneous Functions for "Grid" Graphics
+    library(Metrics) # Evaluation Metrics for Machine Learning
+    library(randomForest) # Breiman and Cutler's Random Forests for Classification and Regression
+    library(e1071) # Misc Functions of the Department of Statistics, Probability Theory Group (Formerly: E1071), TU Wien
+    library(corrplot) # Visualization of a Correlation Matrix
+    library(DMwR2) # Functions and Data for the Second Edition of "Data Mining with R"
+    library(rsample) # General Resampling Infrastructure
+    library(skimr) # Compact and Flexible Summaries of Data
+    library(psych) # Procedures for Psychological, Psychometric, and Personality Research
+    library(tree) # Classification and Regression Trees
+    library(tidymodels) # Easily Install and Load the 'Tidymodels' Packages
+    library(janitor) # Simple Tools for Examining and Cleaning Dirty Data
+    library(GGally) # Extension to 'ggplot2'
+    library(tidyquant) # Tidy Quantitative Financial Analysis
+    library(doParallel) # Foreach Parallel Adaptor for the 'parallel' Package
+    library(Boruta) # Wrapper Algorithm for All Relevant Feature Selection
+    library(correlationfunnel) # Speed Up Exploratory Data Analysis (EDA) with the Correlation Funnel
+    library(naniar) # viewing and handling missing data
+    # library(dataxray) # An interactive table interface for data summaries
+    library(plotly) # Create interactive plots
+    library(themis) # Upsampling and Downsampling methods for tidymodels
+    library(questionr) # this will give you odds ratios
+    library(rules) # Bindings for additional models for use with the 'parsnip' package
+    library(baguette) # Efficient Model Functions for Bagging
+    library(finetune) # The ability to tune models is important. 'finetune' enhances the 'tune' package by providing more specialized methods for finding reasonable values of model tuning
+    library(stringr) # helps with manipulating strings
+    library(probably) # threshold manipulation for tidymodels
+    library(glmnet) # generalized linear model with LASSO, Ridge, and Elasticnet
+    library(tidylog, warn.conflicts = FALSE)
+})
+
+for (f in getNamespaceExports("tidylog")) {
+    conflicted::conflict_prefer(f, "tidylog", quiet = TRUE)
+}
+
+
+conflict_prefer("tune", "tune")
+```
+
+
+
+Set your `conflict_prefer`.
+
+```{r}
+conflict_prefer("select", "dplyr")
+conflict_prefer("tune", "tune")
+conflict_prefer("chisq.test", "stats")
+conflict_prefer("filter", "dplyr")
+conflict_prefer("skewness", "PerformanceAnalytics")
+conflict_prefer("fit", "parsnip")
+conflict_prefer("rmse", "yardstick")
+conflict_prefer("vi", "vip")
+conflicts_prefer(yardstick::sensitivity)
+conflicts_prefer(yardstick::specificity)
+conflicts_prefer(yardstick::accuracy)
+conflicts_prefer(yardstick::precision)
+```
+
+Load helper functions
+
+```{r}
+#From Matt Dancho DS4B 201
+
+plot_ggpairs <- function(data, color = NULL, density_alpha = 0.5) {
+    
+    color_expr <- enquo(color)
+    
+    if (rlang::quo_is_null(color_expr)) {
+        
+        g <- data %>%
+            ggpairs(lower = "blank") 
+        
+    } else {
+        
+        color_name <- quo_name(color_expr)
+        
+        g <- data %>%
+            ggpairs(mapping = aes_string(color = color_name), 
+                    lower = "blank", legend = 1,
+                    diag = list(continuous = wrap("densityDiag", 
+                                                  alpha = density_alpha))) +
+            theme(legend.position = "bottom")
+    }
+    
+    return(g)
+    
+}
+
+#From Matt Dancho DS4B 201
+plot_hist_facet <- function(data, fct_reorder = FALSE, fct_rev = FALSE, 
+                            bins = 10, fill = palette_light()[[3]], color = "white", ncol = 5, scale = "free") {
+    
+    data_factored <- data %>%
+        mutate_if(is.character, as.factor) %>%
+        mutate_if(is.factor, as.numeric) %>%
+        gather(key = key, value = value, factor_key = TRUE) 
+    
+    if (fct_reorder) {
+        data_factored <- data_factored %>%
+            mutate(key = as.character(key) %>% as.factor())
+    }
+    
+    if (fct_rev) {
+        data_factored <- data_factored %>%
+            mutate(key = fct_rev(key))
+    }
+    
+    g <- data_factored %>%
+        ggplot(aes(x = value, group = key)) +
+        geom_histogram(bins = bins, fill = fill, color = color) +
+        facet_wrap(~ key, ncol = ncol, scale = scale) + 
+        theme_tq()
+    
+    return(g)
+    
+}
+```
+
+
+```{r}
+Data <- read_excel("C:/UGA IOMP Class/UGA IOMP 2023/00_Data/WA_Fn-UseC_-HR-Employee-Attrition.xlsx")
+```
+
+We will also add an ID to help us keep track of individuals if necessary.
+
+
+```{r}
+Data <- Data %>%
+  mutate(ID = row_number()) %>%
+  select(ID, everything())
+```
+
+And now, we'll change `Attrition` into a factor.
+
+```{r}
+Data <- Data %>%
+  mutate(Attrition = as.factor(Attrition))
+```
+
+
+Take only the important variables as determined by Boruta in Class 3.
+
+
+```{r}
+Data <- Data %>%
+    select(ID,
+           EmployeeNumber,
+           Attrition,
+           Age,
+           BusinessTravel,
+           Department,
+           EnvironmentSatisfaction,
+           JobInvolvement,
+           JobLevel,
+           JobRole,
+           JobSatisfaction,
+           MaritalStatus,
+           MonthlyIncome,
+           NumCompaniesWorked,
+           OverTime,
+           StockOptionLevel,
+           TotalWorkingYears,
+           YearsAtCompany,
+           YearsInCurrentRole,
+           YearsSinceLastPromotion,
+           YearsWithCurrManager)
+```
+
+
+Let's go ahead and run it again incorporating the `strata` argument to see how they differ, if at all.
+
+```{r}
+set.seed(2020)
+data_split <- initial_split(Data, prop = 0.75, strata = "Attrition")
+
+train_data <- training(data_split)
+
+test_data <- testing(data_split)
+
+tabyl(train_data$Attrition)
+
+tabyl(test_data$Attrition)
+```
+
+
+## Cross Validation V-Folds creation
+
+Now to go ahead and create our splits to use in modeling later.
+
+```{r}
+set.seed(2020)
+cv_folds <- vfold_cv(train_data, v = 10, strata = "Attrition") #We'll need to remember this later.
+```
+
+
+# Reload the model
+
+```{r}
+# Load the model
+RF_wflw_fit_final <- readRDS("C:/UGA IOMP Class/UGA IOMP 2023/01_Models/RF_model_for_attrition_2023.rds")
+```
+
+# Reload the test results
+
+```{r}
+RF_test_results <- readRDS("C:/UGA IOMP Class/UGA IOMP 2023/01_Models/RF_test_results_for_attrition_2023.rds")
+```
+
+
+## Make predictions
+
+```{r}
+RF_predictions_tbl <- RF_wflw_fit_final %>%
+    predict(new_data = Data) %>%
+    bind_cols(Data)
+```
+
+```{r}
+### Get probabilities of someone leaving
+
+RF_prob_predictions <- RF_wflw_fit_final %>%
+    predict(new_data = Data,
+            type = "prob") # added type = "prob" to give the probabilities
+
+RF_predictions_tbl <- RF_prob_predictions %>%
+    bind_cols(RF_predictions_tbl)
+```
+
+
+```{r}
+### Important variables
+
+RF_importance_tbl <- vip::vi(RF_wflw_fit_final$fit$fit$fit)
+
+# This
+RF_wflw_fit_final %>%
+    fit(Data) %>%
+    extract_fit_parsnip() %>%
+    vip::vi()
+
+# is the same as this importance_tbl <- vip::vi(wflw_fit_final$fit$fit$fit). I'm not sure this this helps, just found it interesting
+
+vip::vip(RF_wflw_fit_final$fit$fit$fit)
+
+vip::vip(RF_wflw_fit_final$fit$fit$fit,
+         geom = "col",
+         aesthetics = list(fill = "steelblue")) +
+    labs(title = "Feature Importance")
+
+```
+
+## Make Predictions
+
+```{r}
+### Make predictions
+
+RF_predictions_tbl <- RF_wflw_fit_final %>%
+    predict(new_data = Data) %>%
+    bind_cols(Data)
+
+
+### Get probabilities of someone leaving
+
+RF_prob_predictions <- RF_wflw_fit_final %>%
+    predict(new_data = Data,
+            type = "prob") # added type = "prob" to give the probabilities
+
+RF_predictions_tbl <- RF_prob_predictions %>%
+    bind_cols(RF_predictions_tbl)
+```
+
+```{r}
+#######################################################################################################
+#######################################################################################################
+########################################### ROC CURVE #################################################
+
+# Random Forest
+
+RF_roc <- RF_predictions_tbl %>%
+    select(Attrition, 
+           .pred_Yes,
+           .pred_No,
+           .pred_class) %>%
+    mutate(Attrition = as.factor(Attrition)) %>% # needs to be a factor
+    mutate(model = "Random Forest")
+
+RF_roc %>%
+    roc_curve(Attrition, .pred_No) %>%
+    ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+    geom_line(size = 1.5, color = "midnightblue") +
+    geom_abline(
+        lty = 2, alpha = 0.5,
+        color = "gray50",
+        size = 1.2
+    ) 
+```
+
+## PR Curve
+
+```{r}
+RF_roc %>%
+    pr_curve(Attrition, .pred_No) %>%
+  ggplot(aes(x = recall, y = precision)) +
+  geom_path() + 
+  coord_equal() +
+  theme_bw()
+```
+
+
+```{r}
+#######################################################################################################
+#######################################################################################################
+####################################### CONFUSION MATRIX ##############################################
+
+# generate a confusion matrix
+conflict_prefer("spec", "yardstick")
+
+RF_roc %>%
+    conf_mat(truth = Attrition, estimate = .pred_class)
+
+```
+
+```{r}
+RF_roc %>%
+    conf_mat(truth = Attrition, estimate = .pred_class) %>%
+    summary()
+```
+
+
+
+
