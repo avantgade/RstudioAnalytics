@@ -127,7 +127,7 @@ We will load it manually
 
 ```{r}
 library(readr)
-Data <- read_csv("C:/UGA IOMP Class/UGA IOMP 2023/00_Data/glassdoortest1.csv")
+Data <- read_csv("C:/Advanced Analytics Project/00_Data/glassdoortest1.csv")
 ```
 
 Let's get our column names.
@@ -223,7 +223,7 @@ You can also do subcategories such as:
 
 What others can you think of?
 
-Could you build out your own classifer with ~20 or so meta categories and subcategories as needed?
+Could you build out your own classifer with ~20 or so meta categories and subcategories as needed? THIS IS RELATED TO HW
 
 ```{r}
 #Creating a beginning using `now` from lubridate.
@@ -417,6 +417,6 @@ addFilter(wb, "Comment Report", row = 8, cols = 1:nrow(TEST)) #Add your filter a
 #Now we'll do a fancy save by customizing the file name using paste0 and system time. We'll also assume this was for the previous month. You'll also need to make this path the one you want on your computer. 
 
 
-saveWorkbook(wb, paste0("C:/UGA IOMP Class/UGA IOMP 2023/Class 4/Comment_Report_", format(floor_date(Sys.Date()-months(1), "month"), "%B_%Y") , ".xlsx"), overwrite = TRUE)
+saveWorkbook(wb, paste0("C:/Advanced Analytics Project/00_Data/Comment_Report_", format(floor_date(Sys.Date()-months(1), "month"), "%B_%Y") , ".xlsx"), overwrite = TRUE)
 ```
 

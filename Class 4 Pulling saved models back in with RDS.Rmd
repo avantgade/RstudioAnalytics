@@ -30,7 +30,7 @@ pacman::p_load(digest,
                MASS,
                RCurl,
                DT,
-               modelr,
+               moderf,
                broom,
                purrr,
                pROC,
@@ -85,9 +85,9 @@ suppressPackageStartupMessages({
     library(broom) # Convert Statistical Objects into Tidy Tibbles
     library(ggplot2) # grammar of graphics for visualization
     library(knitr) # A General-Purpose Package for Dynamic Report Generation in R
-    library(RCurl) # General Network (HTTP/FTP/...) Client Interface for R
+    library(RCurl) # General Network (HTTP/FTP/...) Client Intelrace for R
     library(DT) # A Wrapper of the JavaScript Library 'DataTables'
-    library(modelr) # Modelling Functions that Work with the Pipe
+    library(moderf) # Modelling Functions that Work with the Pipe
     library(purrr) # Functional Programming Tools - helps with mapping (i.e., loops)
     library(pROC) #	Display and Analyze ROC Curves
     library(data.table) # Fast aggregation of large data (e.g. 100GB in RAM)
@@ -110,7 +110,7 @@ suppressPackageStartupMessages({
     library(Boruta) # Wrapper Algorithm for All Relevant Feature Selection
     library(correlationfunnel) # Speed Up Exploratory Data Analysis (EDA) with the Correlation Funnel
     library(naniar) # viewing and handling missing data
-    # library(dataxray) # An interactive table interface for data summaries
+    # library(dataxray) # An interactive table intelrace for data summaries
     library(plotly) # Create interactive plots
     library(themis) # Upsampling and Downsampling methods for tidymodels
     library(questionr) # this will give you odds ratios
@@ -212,7 +212,7 @@ plot_hist_facet <- function(data, fct_reorder = FALSE, fct_rev = FALSE,
 
 
 ```{r}
-Data <- read_excel("C:/UGA IOMP Class/UGA IOMP 2023/00_Data/WA_Fn-UseC_-HR-Employee-Attrition.xlsx")
+Data <- read_excel("C:/Advanced Analytics Project/00_Data/WA_Fn-UseC_-HR-Employee-Attrition.xlsx")
 ```
 
 We will also add an ID to help us keep track of individuals if necessary.
@@ -261,50 +261,50 @@ Data <- Data %>%
 ```
 
 
-Let's go ahead and run it again incorporating the `strata` argument to see how they differ, if at all.
+<!-- Let's go ahead and run it again incorporating the `strata` argument to see how they differ, if at all. -->
 
-```{r}
-set.seed(2020)
-data_split <- initial_split(Data, prop = 0.75, strata = "Attrition")
+<!-- ```{r} -->
+<!-- set.seed(2020) -->
+<!-- data_split <- initial_split(Data, prop = 0.75, strata = "Attrition") -->
 
-train_data <- training(data_split)
+<!-- train_data <- training(data_split) -->
 
-test_data <- testing(data_split)
+<!-- test_data <- testing(data_split) -->
 
-tabyl(train_data$Attrition)
+<!-- tabyl(train_data$Attrition) -->
 
-tabyl(test_data$Attrition)
-```
+<!-- tabyl(test_data$Attrition) -->
+<!-- ``` -->
 
 
-## Cross Validation V-Folds creation
+<!-- ## Cross Validation V-Folds creation -->
 
-Now to go ahead and create our splits to use in modeling later.
+<!-- Now to go ahead and create our splits to use in modeling later. -->
 
-```{r}
-set.seed(2020)
-cv_folds <- vfold_cv(train_data, v = 10, strata = "Attrition") #We'll need to remember this later.
-```
+<!-- ```{r} -->
+<!-- set.seed(2020) -->
+<!-- cv_folds <- vfold_cv(train_data, v = 10, strata = "Attrition") #We'll need to remember this later. -->
+<!-- ``` -->
 
 
 # Reload the model
 
 ```{r}
 # Load the model
-RF_wflw_fit_final <- readRDS("C:/UGA IOMP Class/UGA IOMP 2023/01_Models/RF_model_for_attrition_2023.rds")
+LR_wflw_fit_final <- readRDS("C:/Advanced Analytics Project/00_Data/LR_model_for_attrition_2024.rds")
 ```
 
 # Reload the test results
 
 ```{r}
-RF_test_results <- readRDS("C:/UGA IOMP Class/UGA IOMP 2023/01_Models/RF_test_results_for_attrition_2023.rds")
+LR_test_results <- readRDS("C:/Advanced Analytics Project/00_Data/LR_test_results_for_attrition_2024.rds")
 ```
 
 
 ## Make predictions
 
 ```{r}
-RF_predictions_tbl <- RF_wflw_fit_final %>%
+LR_predictions_tbl <- LR_wflw_fit_final %>%
     predict(new_data = Data) %>%
     bind_cols(Data)
 ```
@@ -312,31 +312,31 @@ RF_predictions_tbl <- RF_wflw_fit_final %>%
 ```{r}
 ### Get probabilities of someone leaving
 
-RF_prob_predictions <- RF_wflw_fit_final %>%
+LR_prob_predictions <- LR_wflw_fit_final %>%
     predict(new_data = Data,
             type = "prob") # added type = "prob" to give the probabilities
 
-RF_predictions_tbl <- RF_prob_predictions %>%
-    bind_cols(RF_predictions_tbl)
+LR_predictions_tbl <- LR_prob_predictions %>%
+    bind_cols(LR_predictions_tbl)
 ```
 
 
 ```{r}
 ### Important variables
 
-RF_importance_tbl <- vip::vi(RF_wflw_fit_final$fit$fit$fit)
+LR_importance_tbl <- vip::vi(LR_wflw_fit_final$fit$fit$fit)
 
 # This
-RF_wflw_fit_final %>%
+LR_wflw_fit_final %>%
     fit(Data) %>%
     extract_fit_parsnip() %>%
     vip::vi()
 
 # is the same as this importance_tbl <- vip::vi(wflw_fit_final$fit$fit$fit). I'm not sure this this helps, just found it interesting
 
-vip::vip(RF_wflw_fit_final$fit$fit$fit)
+vip::vip(LR_wflw_fit_final$fit$fit$fit)
 
-vip::vip(RF_wflw_fit_final$fit$fit$fit,
+vip::vip(LR_wflw_fit_final$fit$fit$fit,
          geom = "col",
          aesthetics = list(fill = "steelblue")) +
     labs(title = "Feature Importance")
@@ -348,19 +348,19 @@ vip::vip(RF_wflw_fit_final$fit$fit$fit,
 ```{r}
 ### Make predictions
 
-RF_predictions_tbl <- RF_wflw_fit_final %>%
+LR_predictions_tbl <- LR_wflw_fit_final %>%
     predict(new_data = Data) %>%
     bind_cols(Data)
 
 
 ### Get probabilities of someone leaving
 
-RF_prob_predictions <- RF_wflw_fit_final %>%
+LR_prob_predictions <- LR_wflw_fit_final %>%
     predict(new_data = Data,
             type = "prob") # added type = "prob" to give the probabilities
 
-RF_predictions_tbl <- RF_prob_predictions %>%
-    bind_cols(RF_predictions_tbl)
+LR_predictions_tbl <- LR_prob_predictions %>%
+    bind_cols(LR_predictions_tbl)
 ```
 
 ```{r}
@@ -370,7 +370,7 @@ RF_predictions_tbl <- RF_prob_predictions %>%
 
 # Random Forest
 
-RF_roc <- RF_predictions_tbl %>%
+LR_roc <- LR_predictions_tbl %>%
     select(Attrition, 
            .pred_Yes,
            .pred_No,
@@ -378,7 +378,7 @@ RF_roc <- RF_predictions_tbl %>%
     mutate(Attrition = as.factor(Attrition)) %>% # needs to be a factor
     mutate(model = "Random Forest")
 
-RF_roc %>%
+LR_roc %>%
     roc_curve(Attrition, .pred_No) %>%
     ggplot(aes(x = 1 - specificity, y = sensitivity)) +
     geom_line(size = 1.5, color = "midnightblue") +
@@ -392,7 +392,7 @@ RF_roc %>%
 ## PR Curve
 
 ```{r}
-RF_roc %>%
+LR_roc %>%
     pr_curve(Attrition, .pred_No) %>%
   ggplot(aes(x = recall, y = precision)) +
   geom_path() + 
@@ -409,13 +409,13 @@ RF_roc %>%
 # generate a confusion matrix
 conflict_prefer("spec", "yardstick")
 
-RF_roc %>%
+LR_roc %>%
     conf_mat(truth = Attrition, estimate = .pred_class)
 
 ```
 
 ```{r}
-RF_roc %>%
+LR_roc %>%
     conf_mat(truth = Attrition, estimate = .pred_class) %>%
     summary()
 ```

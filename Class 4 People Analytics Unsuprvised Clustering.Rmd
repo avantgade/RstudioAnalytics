@@ -31,7 +31,7 @@ suppressPackageStartupMessages({
 set.seed(175) # reproducibility
 
 # hr_data_tbl <- read_xlsx("~/Desktop/R/Clustering/Data/datasets_1067_1925_WA_Fn-UseC_-HR-Employee-Attrition.xlsx")
-hr_data_tbl <- read_excel("C:/UGA IOMP Class/UGA IOMP 2023/00_Data/WA_Fn-UseC_-HR-Employee-Attrition.xlsx")
+hr_data_tbl <- read_excel("C:/Advanced Analytics Project/00_Data/WA_Fn-UseC_-HR-Employee-Attrition.xlsx")
 
 ```
 
