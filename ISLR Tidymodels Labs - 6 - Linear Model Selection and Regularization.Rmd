@@ -209,6 +209,7 @@ lasso_spec <-
   linear_reg(penalty = tune(), mixture = 1) %>% #creating function to create lasso regression using glmnet engine with tuned penalty
   set_mode("regression") %>% 
   set_engine("glmnet") 
+
 lasso_workflow <- workflow() %>% #creating workflow using previously created recipe and specifications with above function
   add_recipe(lasso_recipe) %>% 
   add_model(lasso_spec)

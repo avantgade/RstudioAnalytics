@@ -578,7 +578,7 @@ library(lubridate)
 
 rf_spec <- rand_forest(
   mtry = tune(), #we don't know what to put here yet, so we use `tune` as a filler
-  trees = 100, #1000 #going low here for times sake. You usually want to start with at least 1000
+  trees = 2000, #1000 #going low here for times sake. You usually want to start with at least 1000
   min_n = tune() #we don't know what to put here yet, so we use `tune` as a filler
 ) %>%
   set_mode("classification") %>%
