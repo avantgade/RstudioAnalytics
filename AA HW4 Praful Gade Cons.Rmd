@@ -1,0 +1,687 @@
+---
+title: "AA HW 4 Praful Gade"
+author: "Praful Gade"
+date: "2024-07-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+```{r}
+#Tutorial on gdscrapeR
+#From: https://github.com/mguideng/gdscrapeR
+#June 2019
+
+
+
+############################################################################################
+############################################################################################
+# Clear workspace 
+rm(list = ls())
+############################################################################################
+
+#######################################################################################################
+#######################################################################################################
+##################################LOADING PACKAGES#####################################################
+
+################################################################################
+#Do tryCatch here
+
+tryCatch(require(pacman),finally=utils:::install.packages(pkgs='pacman',repos='http://cran.r-project.org'));
+require(pacman)
+
+##if the above doesn't work, use this code##
+##tryCatch
+#detach("package:pacman", unload = TRUE)
+#install.packages("pacman", dependencies = TRUE)
+# ## install.packages("pacman")
+pacman::p_load(openxlsx, 
+               tidyverse, 
+               devtools,
+               conflicted,
+               lubridate,
+               sentimentr)
+
+#Loading libraries
+library(openxlsx)
+library(tidyverse)
+library(devtools)
+library(conflicted)
+library(lubridate)
+library(sentimentr)
+
+
+# devtools::install_github("mguideng/gdscrapeR")
+
+# library(gdscrapeR)
+```
+
+```{r}
+conflict_prefer("filter", "dplyr")
+```
+
+
+```{r}
+library(readr)
+Data <- read_csv("C:/Advanced Analytics Project/00_Data/glassdoortest1.csv") #importing Honeywell Glassdoor dataset
+```
+
+
+```{r}
+cat(colnames(Data), sep = ",\n") #pulling column names
+```
+
+
+```{r}
+colnames(Data)
+```
+
+```{r}
+Data <- Data %>%
+    rename(ID = "...1") #Renaming Column "1" to ID
+```
+
+
+#Creating new dataframe based off Data dataframe
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#####################BRUTE FORCE TOPIC CLASSIFICATION USING REGEX###################################### -->
+
+Comments_df <- Data %>%
+    select(c(ID, cons)) %>%
+    filter(!is.na(cons)) %>%
+    rename('comments' = 'cons') #collecting pro comments
+
+```
+
+```{r}
+Comments_df <- Comments_df %>%
+  as_tibble() %>%
+  mutate(comments = str_replace_all(comments, "\uFFFD", "")) #sus code that may or may not work
+```
+
+
+#Cleaning data for use
+
+```{r}
+#Converting to lower case
+
+Comments_df <- Comments_df %>%
+    mutate(comments = tolower(comments))
+
+```
+
+
+```{r}
+#Remove all line breaks
+
+Comments_df$comments <- gsub("[\r\n]", "", Comments_df$comments)
+
+Comments_df <- Comments_df %>%
+    select(ID, comments) %>%
+    na.omit()
+
+```
+
+
+
+#Creating categories
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### Size ######################################################### -->
+
+
+size <- c(  '(?=.*company|corporation)(?=.*(?:big|huge|large|global|size|giant))' #This will get company or corporation. as long as some form of big, huge, large etc. etc. occur in the same comment
+                     )
+
+size_pattern <- paste(size, collapse = "|") #Putting everything put into `size` together into a pattern to search for.
+
+size_comments <- as.data.frame(Comments_df[grep(size_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Comments_df %>%
+    mutate(size = ifelse(comments %in% size_comments$comments, "Y",
+                             "N")) #Creating a new object Cons from Comments_df. If any of the comments in the "comments" column match (%in%) the comments exactly, they get a "Y". If not they get a "N" in the new "benefits" column
+```
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### Ethics ######################################################### -->
+
+
+ethics <- c(                '^.*ethic.*$', #this will get ethics, ethical
+                            '\\bcode\\s+of\\s+conduct\\b' #looking for code of conduct
+                     )
+
+ethics_pattern <- paste(ethics, collapse = "|") #Putting everything put into `ethics` together into a pattern to search for.
+
+ethics_comments <- as.data.frame(Comments_df[grep(ethics_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(ethics = ifelse(comments %in% ethics_comments$comments, "Y",
+                             "N")) #Adding new column "Ethics" to Cons.
+```
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### Safety ######################################################### -->
+
+
+safety <- c(        
+                            '(?=.*safe)(?=.*(?:program|protocol|environment|training|atmosphere|workplace))', #looking for safe environment/atmosphere/program etc.
+                            '\\bcode\\s+of\\s+conduct\\b', #looking for code of conduct
+                            '(?=.*clean)(?=.*(?:program|protocol|environment|training|atmosphere|workplace))' #looking for clean space
+                     )
+
+safety_pattern <- paste(safety, collapse = "|") #Putting everything put into `safety` together into a pattern to search for.
+
+safety_comments <- as.data.frame(Comments_df[grep(safety_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(safety = ifelse(comments %in% safety_comments$comments, "Y",
+                             "N")) #Adding new column "safety" to Cons.
+```
+
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### corporate ######################################################### -->
+
+
+corporate <- c(        
+                            '^.*corporate.*$', #looking for corporate
+                            '^.*executive.*$', #looking for executive
+                            '^.*CEO*$', #looking for CEO
+                            '(?=.*upper)(?=.*(?:manage|leader|manage|level))', #looking for upper level manage
+                             '\\bleader\\s?ship\\b' #looking for leadership
+                     )
+
+corporate_pattern <- paste(corporate, collapse = "|") #Putting everything put into `corporate` together into a pattern to search for.
+
+corporate_comments <- as.data.frame(Comments_df[grep(corporate_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(corporate = ifelse(comments %in% corporate_comments$comments, "Y",
+                             "N")) #Adding new column "corporate" to Cons.
+```
+
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### brand ######################################################### -->
+
+
+brand <- c(        
+                            '^.*brand.*$', #looking for brand
+                            '(?=.*company)(?=.*(?:known|respect))' #looking for company respect
+
+                     )
+
+brand_pattern <- paste(brand, collapse = "|") #Putting everything put into `brand` together into a pattern to search for.
+
+brand_comments <- as.data.frame(Comments_df[grep(brand_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(brand = ifelse(comments %in% brand_comments$comments, "Y",
+                             "N")) #Adding new column "brand" to Cons.
+```
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### stock ######################################################### -->
+
+
+stock <- c(        
+                            '^.*stock.*$', #looking for stock
+                            '^.*share.*$' #looking for shares
+
+                     )
+
+stock_pattern <- paste(stock, collapse = "|") #Putting everything put into `stock` together into a pattern to search for.
+
+stock_comments <- as.data.frame(Comments_df[grep(stock_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(stock = ifelse(comments %in% stock_comments$comments, "Y",
+                             "N")) #Adding new column "stock" to Cons.
+```
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### innovation ######################################################### -->
+
+
+innovation <- c(        
+                            '^.*innovat.*$', #looking for innovation, innovate, etc
+                            '^.*tech.*$' ,#looking for tech
+                            '(?=.*company)(?=.*(?:modern|forward|progress))' #modern, forward, progressive company
+
+                     )
+
+innovation_pattern <- paste(innovation, collapse = "|") #Putting everything put into `innovation` together into a pattern to search for.
+
+innovation_comments <- as.data.frame(Comments_df[grep(innovation_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(innovation = ifelse(comments %in% innovation_comments$comments, "Y",
+                             "N")) #Adding new column "innovation" to Cons.
+```
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### remote ######################################################### -->
+
+
+remote <- c(        
+                            '^.*remote.*$', #looking for remote
+                            '\\btele\\s?commute\\b', #looking for telecommute
+                            '\\bwork\\s+from\\s+home\\b', #looking for work from home
+                            '^.*WFH.*$' #looking for WFH
+
+                     )
+
+remote_pattern <- paste(remote, collapse = "|") #Putting everything put into `remote` together into a pattern to search for.
+
+remote_comments <- as.data.frame(Comments_df[grep(remote_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(remote = ifelse(comments %in% remote_comments$comments, "Y",
+                             "N")) #Adding new column "remote" to Cons.
+```
+
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### stable ######################################################### -->
+
+
+stable <- c(        
+                            '^.*stabl.*$', #looking for stable, stability, etc.
+                            '\\bjob\\s?security\\b', #looking for job security
+                            '^.*change.*$',  #change
+                            '^.*transition.*$',  #transition
+                            '\\blay\\s?off\\b', #looking for layoffs
+                            '\\bturn\\s?over\\b', #looking for turnover
+                            '^.*furlough.*$'  #furlough
+
+                     )
+
+stable_pattern <- paste(stable, collapse = "|") #Putting everything put into `stable` together into a pattern to search for.
+
+stable_comments <- as.data.frame(Comments_df[grep(stable_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(stable = ifelse(comments %in% stable_comments$comments, "Y",
+                             "N")) #Adding new column "stable" to Cons.
+```
+
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### location ######################################################### -->
+
+
+location <- c(        
+                            '^.*location.*$', #looking for location
+                            '^.*commute.*$', #looking for commute
+                            '(?=.*drive)(?=.*(?:minute))', #minute drive
+                            '^.*building.*$', #looking for building
+                            '^.*office.*$' #looking for office
+
+                     )
+
+location_pattern <- paste(location, collapse = "|") #Putting everything put into `location` together into a pattern to search for.
+
+location_comments <- as.data.frame(Comments_df[grep(location_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(location = ifelse(comments %in% location_comments$comments, "Y",
+                             "N")) #Adding new column "location" to Cons.
+```
+
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### opmodel ######################################################### -->
+
+
+opmodel <- c(        
+                            '(?=.*model)(?=.*(?:business|org|op))', #biz model, org model, op model, etc
+                            '(?=.*company)(?=.*(?:strateg|strucur))' #company strategy and structure
+
+                     )
+
+opmodel_pattern <- paste(opmodel, collapse = "|") #Putting everything put into `opmodel` together into a pattern to search for.
+
+opmodel_comments <- as.data.frame(Comments_df[grep(opmodel_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(opmodel = ifelse(comments %in% opmodel_comments$comments, "Y",
+                             "N")) #Adding new column "opmodel" to Cons.
+```
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### community ######################################################### -->
+
+
+community <- c(        
+                            '^.*community.*$', #looking for community
+                            '^.*team.*$', #looking for team
+                            '^.*staff.*$', #looking for team
+                            '(?=.*employee)(?=.*(?:other|fellow))', #looking for other or fellow employees
+                            '\\bco\\s?worker\\b' #looking for coworker
+
+                     )
+
+community_pattern <- paste(community, collapse = "|") #Putting everything put into `community` together into a pattern to search for.
+
+community_comments <- as.data.frame(Comments_df[grep(community_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(community = ifelse(comments %in% community_comments$comments, "Y",
+                             "N")) #Adding new column "community" to Cons.
+```
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### contracts ######################################################### -->
+
+
+contracts <- c(        
+                            '^.*contract.*$', #looking for contracts
+                            '^.*gov.*$' #looking for government ties
+
+                     )
+
+contracts_pattern <- paste(contracts, collapse = "|") #Putting everything put into `contracts` together into a pattern to search for.
+
+contracts_comments <- as.data.frame(Comments_df[grep(contracts_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(contracts = ifelse(comments %in% contracts_comments$comments, "Y",
+                             "N")) #Adding new column "contracts" to Cons.
+```
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### challenge ######################################################### -->
+
+
+challenge <- c(        
+                            '^.*challeng.*$', #looking for challenge/challenging
+                            '^.*demand.*$', #looking for demand/demanding
+                            '\\bwork\\s?load\\b', #looking for workload
+                            '\\bamount\\s?of\\s?work\\b', #looking for amount of work
+                            '(?=.*work)(?=.*(?:easy|hard))' #looking for easy or hard work
+
+                     )
+
+challenge_pattern <- paste(challenge, collapse = "|") #Putting everything put into `challenge` together into a pattern to search for.
+
+challenge_comments <- as.data.frame(Comments_df[grep(challenge_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(challenge = ifelse(comments %in% challenge_comments$comments, "Y",
+                             "N")) #Adding new column "challenge" to Cons.
+```
+
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### worklife ######################################################### -->
+
+
+worklife <- c(        
+                            '(?=.*work)(?=.*(?:life|balance))' #looking for work life, work balance
+
+
+                     )
+
+worklife_pattern <- paste(worklife, collapse = "|") #Putting everything put into `worklife` together into a pattern to search for.
+
+worklife_comments <- as.data.frame(Comments_df[grep(worklife_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(worklife = ifelse(comments %in% worklife_comments$comments, "Y",
+                             "N")) #Adding new column "worklife" to Cons.
+```
+
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### culture ######################################################### -->
+
+
+culture <- c(        
+                            '^.*culture.*$', #looking for culture
+                            '^.*environment.*$', #looking for environment
+                            '^.*morale.*$', #looking for morale
+                            '^.*politic.*$', #looking for politics
+                            '\\bplace\\s?to\\s?work\\b' #looking for place to work
+
+                     )
+
+culture_pattern <- paste(culture, collapse = "|") #Putting everything put into `culture` together into a pattern to search for.
+
+culture_comments <- as.data.frame(Comments_df[grep(culture_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(culture = ifelse(comments %in% culture_comments$comments, "Y",
+                             "N")) #Adding new column "culture" to Cons.
+```
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### flexible ######################################################### -->
+
+
+flexible <- c(        
+                            '^.*flex.*$', #looking for flex, flexibility, flexible
+                            '^.*freedom.*$' #looking for freedom
+
+                     )
+
+flexible_pattern <- paste(flexible, collapse = "|") #Putting everything put into `flexible` together into a pattern to search for.
+
+flexible_comments <- as.data.frame(Comments_df[grep(flexible_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(flexible = ifelse(comments %in% flexible_comments$comments, "Y",
+                             "N")) #Adding new column "flexible" to Cons.
+```
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### experience ######################################################### -->
+
+
+experience <- c(        
+                            '^.*experience.*$', #looking for experience
+                            '^.*opportunity.*$', #looking for opportunities
+                            '^.*project.*$' #looking for projects
+
+                     )
+
+experience_pattern <- paste(experience, collapse = "|") #Putting everything put into `experience` together into a pattern to search for.
+
+experience_comments <- as.data.frame(Comments_df[grep(experience_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(experience = ifelse(comments %in% experience_comments$comments, "Y",
+                             "N")) #Adding new column "experience" to Cons.
+```
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### advancement ######################################################### -->
+
+
+advancement <- c(        
+                            '^.*advance.*$', #looking for advancement
+                            '^.*progression.*$', #looking for progression [career]
+                            '^.*growth.*$', #looking for growth
+                            '^.*promot.*$', #looking for promotions, promoting
+                            '(?=.*opportunit)(?=.*(?:grow|progress))' #oppotunities to grow etc
+
+                     )
+
+advancement_pattern <- paste(advancement, collapse = "|") #Putting everything put into `advancement` together into a pattern to search for.
+
+advancement_comments <- as.data.frame(Comments_df[grep(advancement_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(advancement = ifelse(comments %in% advancement_comments$comments, "Y",
+                             "N")) #Adding new column "advancement" to Cons.
+```
+
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### learn ######################################################### -->
+
+
+learn <- c(        
+                            '^.*learn.*$', #looking for learn
+                            '^.*train.*$', #looking for train
+                            '^.*develop*$' #looking for develop, development
+                          
+
+                     )
+
+learn_pattern <- paste(learn, collapse = "|") #Putting everything put into `learn` together into a pattern to search for.
+
+learn_comments <- as.data.frame(Comments_df[grep(learn_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(learn = ifelse(comments %in% learn_comments$comments, "Y",
+                             "N")) #Adding new column "learn" to Cons.
+```
+
+
+```{r}
+#' <!--####################################################################################################### -->
+#' <!--####################################################################################################### -->
+#' <!--#################################### manage ######################################################### -->
+
+
+manage <- c(        
+                            '(?=.*manage)(?=.*(?:direct|report|manager))', #looking for direct or close manager/management
+                            '^.*boss.*$', #looking for boss
+                            '^.*supervisor.*$' #looking for supervisor
+
+                     )
+
+manage_pattern <- paste(manage, collapse = "|") #Putting everything put into `manage` together into a pattern to search for.
+
+manage_comments <- as.data.frame(Comments_df[grep(manage_pattern, Comments_df$comments, value = FALSE, perl = TRUE),]) # Searching over the cons comments to find corresponding patterns.
+
+Cons <- Cons %>%
+    mutate(manage = ifelse(comments %in% manage_comments$comments, "Y",
+                             "N")) #Adding new column "manage" to Cons.
+```
+
+
+#Writing Cons to Excel
+
+```{r}
+##################################
+# Comment Report
+##################################
+
+#Creating df for header
+
+INTRO <- c("Company Name",
+
+         "Data Source: Glassdoor",
+
+         "Data As Of: Q3 2024",
+
+         "Prepared on: 7/21/2024",
+
+         "Prepared by: Praful Gade")
+
+wb <- openxlsx::createWorkbook() #Creating a work book for pro commnts
+
+
+#Comment Report
+
+addWorksheet(wb, "Cons Comment Report") #naming spreadsheet
+
+writeData(wb, "Cons Comment Report", INTRO) #Write your INTRO
+
+
+#Create style
+
+style1 <- createStyle(fontColour = "#000080", textDecoration = "Bold") #Choose your custom font color (https://www.rgbtohex.net/) and make it bold. Call it style1
+
+ 
+
+addStyle(wb, style = style1, rows= 1:5, cols = 1, sheet = "Cons Comment Report") #add this style to your worksheet. Tell it which rows and columns
+
+writeData(wb, "Cons Comment Report", Cons, startRow = 8) #put your DF (in this case TEST) into the sheet under your writing (row 8)
+
+hs1 <- createStyle(textDecoration = "Bold") #create a new style for heading
+
+addStyle(wb, style = hs1, rows = 8, cols = 1:nrow(Cons), sheet = "Cons Comment Report") #Tell it where to go. We'll do 50 columns in this case so it can grow if needed
+
+#Freeze Panes
+
+#Also check here: https://stackoverflow.com/questions/37677326/applying-style-to-all-sheets-of-a-workbook-using-openxlsx-package-in-r
+
+freezePane(wb, "Cons Comment Report", firstActiveRow = 9) #Freeze those panes. You know you want to. Tell it where to start.
+
+#Add filter
+
+addFilter(wb, "Cons Comment Report", row = 8, cols = 1:nrow(Cons)) #Add your filter as well. If you're trying to impress, you might as well go all in :)
+
+#Now we'll do a fancy save by customizing the file name using paste0 and system time. We'll also assume this was for the previous month. You'll also need to make this path the one you want on your computer. 
+
+
+saveWorkbook(wb, paste0("C:/Advanced Analytics Project/00_Data/Cons_Comment_Report_", format(floor_date(Sys.Date()-months(1), "month"), "%B_%Y") , ".xlsx"), overwrite = TRUE)
+```
+
+
+
+
+
+
+
+
+
+
+
